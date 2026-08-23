@@ -1,0 +1,135 @@
+.splash {
+  position: fixed;
+  inset: 0;
+  background: #f5f0e8;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  transition: opacity 1s cubic-bezier(0.23, 1, 0.32, 1), visibility 0s 1s;
+}
+
+.hide {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.splashContent {
+  max-width: 900px;
+  width: 90%;
+  text-align: center;
+  padding: 2rem;
+}
+
+.arame {
+  font-size: clamp(2.2rem, 8vw, 5.2rem);
+  font-weight: 300;
+  letter-spacing: clamp(8px, 3vw, 22px);
+  text-transform: uppercase;
+  color: #2a0a0a;
+  font-family: Georgia, serif;
+  animation: fadeScaleUp 0.9s cubic-bezier(0.2, 0.9, 0.4, 1.1) forwards;
+  opacity: 0;
+}
+
+.arameSub {
+  font-size: clamp(0.55rem, 1.5vw, 0.7rem);
+  letter-spacing: 6px;
+  color: #b88a2b;
+  text-transform: uppercase;
+  margin-bottom: 2rem;
+  animation: fadeUp 0.7s ease-out 0.2s forwards;
+  opacity: 0;
+}
+
+.dividerMain {
+  width: 55px;
+  height: 1px;
+  background: #c6a43f;
+  margin: 1.2rem auto 1.6rem;
+  animation: drawLine 0.6s ease-out 0.4s forwards;
+  transform: scaleX(0);
+  transform-origin: center;
+}
+
+.houseOf {
+  font-size: clamp(0.62rem, 1.8vw, 0.85rem);
+  letter-spacing: 5px;
+  text-transform: uppercase;
+  color: #b88a2b;
+  animation: fadeUp 0.7s ease-out 0.6s forwards;
+  opacity: 0;
+}
+
+.rareFragrance {
+  font-size: clamp(1rem, 3.5vw, 1.7rem);
+  letter-spacing: clamp(4px, 2vw, 9px);
+  font-weight: 500;
+  margin-top: 0.45rem;
+  color: #2a0a0a;
+  text-transform: uppercase;
+  font-family: Georgia, serif;
+  animation: fadeUp 0.7s ease-out 0.75s forwards;
+  opacity: 0;
+}
+
+.dividerShort {
+  width: 38px;
+  height: 1px;
+  background: #c6a43f;
+  margin: 2rem auto 1.2rem;
+  animation: drawLine 0.5s ease-out 0.95s forwards;
+  transform: scaleX(0);
+  transform-origin: center;
+}
+
+.tagline {
+  font-size: clamp(0.62rem, 2vw, 0.85rem);
+  letter-spacing: 7px;
+  text-transform: uppercase;
+  color: #2a0a0a;
+  animation: fadeUp 0.8s ease-out 1.1s forwards;
+  opacity: 0;
+}
+
+.ornament {
+  font-size: 1rem;
+  color: #c6a43f;
+  margin: 1.2rem 0 0;
+  letter-spacing: 8px;
+  animation: fadeUp 0.6s ease-out 1.4s forwards;
+  opacity: 0;
+}
+
+@keyframes fadeScaleUp {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes drawLine {
+  from {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}

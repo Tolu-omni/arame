@@ -1,0 +1,105 @@
+.container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 9999;
+  pointer-events: none;
+  max-width: 400px;
+  width: calc(100% - 48px);
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-radius: 8px;
+  background: rgba(255, 253, 249, 0.85); /* Glassmorphism background matching arame's beige */
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(198, 164, 63, 0.25); /* Elegant gold border */
+  box-shadow: 0 10px 30px rgba(42, 30, 18, 0.12);
+  color: #2a1e12;
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 500;
+  line-height: 1.4;
+  overflow: hidden;
+}
+
+/* Glassmorphism custom glow for different states */
+.toast.success {
+  border-color: rgba(151, 69, 47, 0.35); /* terracotta border */
+  box-shadow: 0 10px 30px rgba(151, 69, 47, 0.08), 0 4px 12px rgba(42, 30, 18, 0.08);
+}
+
+.toast.error {
+  border-color: rgba(239, 64, 40, 0.35);
+  box-shadow: 0 10px 30px rgba(239, 64, 40, 0.08), 0 4px 12px rgba(42, 30, 18, 0.08);
+}
+
+.toast.warning {
+  border-color: rgba(198, 164, 63, 0.45);
+}
+
+/* Icons colors matching arame style */
+.successIcon {
+  color: #97452f; /* terracotta */
+}
+
+.errorIcon {
+  color: #ef4028; /* deep red */
+}
+
+.infoIcon {
+  color: #5a4a34;
+}
+
+.warningIcon {
+  color: #b88a2b;
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.message {
+  flex: 1;
+}
+
+.closeBtn {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 4px;
+  color: #8c7f70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.closeBtn:hover {
+  color: #2a1e12;
+  background-color: rgba(42, 30, 18, 0.06);
+}
+
+/* Mobile responsive styles */
+@media (max-width: 640px) {
+  .container {
+    bottom: 16px;
+    right: 50%;
+    transform: translateX(50%);
+    max-width: 480px;
+    width: calc(100% - 32px);
+  }
+}
