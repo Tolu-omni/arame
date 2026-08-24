@@ -1,3 +1,5 @@
+import nodemailer from "nodemailer";
+
 type EmailPayload = {
   html: string;
   subject: string;
@@ -26,13 +28,55 @@ export function getSiteUrl() {
   return `https://${configuredUrl.replace(/\/$/, "")}`;
 }
 
-export async function sendTransactionalEmail(payload: EmailPayload): Promise<EmailResult> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM;
+function normalizeRecipients(to: string | string[]) {
+  return Array.isArray(to) ? to : [to];
+}
 
-  if (!apiKey || !from) {
+async function sendWithGmail(payload: EmailPayload, from: string): Promise<EmailResult> {
+  const user = process.env.GMAIL_USER;
+  const pass = process.env.GMAIL_APP_PASSWORD?.replace(/\s+/g, "");
+
+  if (!user || !pass) {
     return {
-      reason: "Missing RESEND_API_KEY or EMAIL_FROM.",
+      reason: "Missing GMAIL_USER or GMAIL_APP_PASSWORD.",
+      sent: false,
+    };
+  }
+
+  try {
+    const transporter = nodemailer.createTransport({
+      auth: {
+        pass,
+        user,
+      },
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
+    });
+
+    const result = await transporter.sendMail({
+      from,
+      html: payload.html,
+      subject: payload.subject,
+      text: payload.text,
+      to: normalizeRecipients(payload.to),
+    });
+
+    return { id: result.messageId, sent: true };
+  } catch (error) {
+    return {
+      reason: error instanceof Error ? error.message : "Unable to send with Gmail SMTP.",
+      sent: false,
+    };
+  }
+}
+
+async function sendWithResend(payload: EmailPayload, from: string): Promise<EmailResult> {
+  const apiKey = process.env.RESEND_API_KEY;
+
+  if (!apiKey) {
+    return {
+      reason: "Missing RESEND_API_KEY.",
       sent: false,
     };
   }
@@ -44,7 +88,7 @@ export async function sendTransactionalEmail(payload: EmailPayload): Promise<Ema
         html: payload.html,
         subject: payload.subject,
         text: payload.text,
-        to: Array.isArray(payload.to) ? payload.to : [payload.to],
+        to: normalizeRecipients(payload.to),
       }),
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -69,4 +113,29 @@ export async function sendTransactionalEmail(payload: EmailPayload): Promise<Ema
       sent: false,
     };
   }
+}
+
+export async function sendTransactionalEmail(payload: EmailPayload): Promise<EmailResult> {
+  const gmailUser = process.env.GMAIL_USER;
+  const from = process.env.EMAIL_FROM || (gmailUser ? `Arame <${gmailUser}>` : "");
+
+  if (!from) {
+    return {
+      reason: "Missing EMAIL_FROM.",
+      sent: false,
+    };
+  }
+
+  if (gmailUser && process.env.GMAIL_APP_PASSWORD) {
+    return sendWithGmail(payload, from);
+  }
+
+  if (process.env.RESEND_API_KEY) {
+    return sendWithResend(payload, from);
+  }
+
+  return {
+    reason: "Missing Gmail SMTP credentials or RESEND_API_KEY.",
+    sent: false,
+  };
 }

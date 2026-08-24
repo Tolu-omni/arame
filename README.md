@@ -46,10 +46,13 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY=your_paystack_public_key
 PAYSTACK_SECRET_KEY=your_paystack_secret_key
-RESEND_API_KEY=your_resend_api_key
-EMAIL_FROM=Arame <receipts@yourdomain.com>
+EMAIL_FROM=Arame <aramesupport@gmail.com>
+GMAIL_USER=aramesupport@gmail.com
+GMAIL_APP_PASSWORD=your_google_app_password_without_spaces
 ADMIN_EMAILS=toluomoniyi9@gmail.com,toluomoniyi@gmail.com,tolu@arame.com
 ```
+
+`RESEND_API_KEY` is optional and only needed if the store later uses a verified custom email domain with Resend.
 
 Set the Paystack webhook URL to:
 
