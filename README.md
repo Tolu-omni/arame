@@ -1,41 +1,28 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Arame
 
-## Getting Started
+Arame is a fragrance and body oil storefront built with Next.js, Supabase, Paystack, and email receipts. The app includes a live product catalog, customer accounts, checkout, order tracking, wallet card authorization, and an admin dashboard for products and orders.
 
-First, run the development server:
+## Local Development
+
+Install dependencies and start the development server:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run dev
+npm run lint
+npm run build
+npm run images:upload
+```
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-
-## Arame Production Setup
+## Production Setup
 
 Add these environment variables in Vercel:
 
@@ -60,11 +47,30 @@ Set the Paystack webhook URL to:
 https://arame-rose.vercel.app/api/paystack/webhook
 ```
 
-For admin access, add the same admin login email to Supabase by running `supabase/admin_access.sql`
-in the Supabase SQL Editor after replacing `your-admin-login@example.com`.
+For admin access, add the same admin login email to Supabase by running `supabase/admin_access.sql` in the Supabase SQL Editor after replacing `your-admin-login@example.com`.
 
-After adding `SUPABASE_SERVICE_ROLE_KEY` locally, upload all current product images to Supabase Storage and update the live product rows:
+After adding `SUPABASE_SERVICE_ROLE_KEY` locally, upload current product images to Supabase Storage and update the live product rows:
 
 ```bash
 npm run images:upload
+```
+
+## Supabase SQL
+
+The main schema lives in `supabase/schema.sql`. Smaller focused files are available for catalog, image storage, Paystack payment fields, blog data, and admin access.
+
+Run the full schema first for a new project:
+
+```bash
+supabase/schema.sql
+```
+
+Then apply focused update files only when needed:
+
+```bash
+supabase/admin_access.sql
+supabase/product_catalog.sql
+supabase/product_image_storage.sql
+supabase/paystack_payments.sql
+supabase/blog_migration.sql
 ```
