@@ -8,7 +8,10 @@ import { useSearchParams } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { Header } from "@/frontend/components/shared/Header";
 import { Footer } from "@/frontend/components/shared/Footer";
-import { getSupabaseBrowserClient } from "@/frontend/supabase/browser";
+import {
+  clearSupabaseAuthRedirectFromUrl,
+  getSupabaseBrowserClient,
+} from "@/frontend/supabase/browser";
 import { openPaystackTransaction } from "@/frontend/payments/paystack";
 import styles from "./account-page.module.css";
 
@@ -167,12 +170,18 @@ export function AccountPage() {
     let cancelled = false;
 
     supabase.auth.getSession().then(({ data }) => {
+      clearSupabaseAuthRedirectFromUrl();
+
       if (!cancelled) {
         setUser(data.session?.user ?? null);
       }
     });
 
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN") {
+        clearSupabaseAuthRedirectFromUrl();
+      }
+
       setUser(session?.user ?? null);
 
       if (event === "SIGNED_IN" && session?.user) {
