@@ -32,7 +32,6 @@ export const sortOptions = [
 
 export const categoryFilters: Record<string, Filter[]> = {
   "All Products": [
-    { title: "Product type", defaultOpen: true, type: "options", options: ["Men's Perfumes", "Women's Perfumes", "Body Oils"] },
     { title: "Price", defaultOpen: false, type: "range", min: "NGN 50", max: "NGN 180" },
     { title: "Concentration", defaultOpen: false, type: "options", options: ["Eau de Parfum", "Eau de Toilette", "Parfum"] },
     { title: "Scent", defaultOpen: false, type: "options", options: ["Jasmine", "Lavender", "Rosehip", "Sandalwood", "Vanilla"] },
@@ -40,7 +39,6 @@ export const categoryFilters: Record<string, Filter[]> = {
     { title: "Size", defaultOpen: false, type: "options", options: ["100ml", "200ml"] },
   ],
   "Men's Perfumes": [
-    { title: "Product type", defaultOpen: true, type: "options", options: ["All Products"] },
     { title: "Price", defaultOpen: true, type: "range", min: "NGN 80", max: "NGN 180" },
     { title: "Concentration", defaultOpen: true, type: "options", options: ["Eau de Parfum", "Eau de Toilette", "Parfum"] },
     { title: "Scent", defaultOpen: false, type: "options", options: ["Jasmine", "Lavender", "Rosehip", "Sandalwood", "Vanilla"] },
@@ -48,7 +46,6 @@ export const categoryFilters: Record<string, Filter[]> = {
     { title: "Size", defaultOpen: true, type: "options", options: ["100ml", "200ml"] },
   ],
   "Body Oils": [
-    { title: "Product type", defaultOpen: true, type: "options", options: ["All Products"] },
     { title: "Price", defaultOpen: true, type: "range", min: "NGN 50", max: "NGN 72" },
     { title: "Concentration", defaultOpen: false, type: "options", options: ["Eau de Parfum", "Eau de Toilette", "Parfum"] },
     { title: "Scent", defaultOpen: true, type: "options", options: ["Jasmine", "Lavender", "Rosehip", "Sandalwood", "Vanilla"] },
@@ -56,7 +53,6 @@ export const categoryFilters: Record<string, Filter[]> = {
     { title: "Size", defaultOpen: true, type: "options", options: ["100ml", "200ml"] },
   ],
   "Women's Perfumes": [
-    { title: "Product type", defaultOpen: true, type: "options", options: ["All Products"] },
     { title: "Price", defaultOpen: true, type: "range", min: "NGN 75", max: "NGN 165" },
     { title: "Concentration", defaultOpen: false, type: "options", options: ["Eau de Parfum", "Eau de Toilette", "Parfum"] },
     { title: "Scent", defaultOpen: false, type: "options", options: ["Jasmine", "Lavender", "Rosehip", "Sandalwood", "Vanilla"] },
