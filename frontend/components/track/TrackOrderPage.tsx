@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -15,10 +15,12 @@ import {
   ReceiptText,
   RefreshCw,
   Truck,
+  X,
   XCircle,
 } from "lucide-react";
 import { Header } from "@/frontend/components/shared/Header";
 import { Footer } from "@/frontend/components/shared/Footer";
+import { useCurrency } from "@/frontend/context/CurrencyContext";
 import { getSupabaseBrowserClient } from "@/frontend/supabase/browser";
 import {
   ORDER_TRACKING_STEPS,
@@ -104,10 +106,6 @@ const orderSelect = [
 const notificationSelect = "id,title,message,status,created_at,read_at";
 
 const stepIcons = [ReceiptText, Clock3, PackageCheck, Truck, CheckCircle2];
-
-function formatCurrency(value: number | string) {
-  return `\u20A6${Number(value || 0).toFixed(2)}`;
-}
 
 function formatDateTime(value?: string | null) {
   if (!value) {
@@ -210,10 +208,13 @@ function getErrorMessage(error: unknown) {
 export function TrackOrderPage({ orderId }: { orderId: string }) {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const searchParams = useSearchParams();
+  const { formatPrice } = useCurrency();
+  const lastAutoOpenedNotificationIdRef = useRef("");
   const trackingCode = searchParams.get("code")?.trim() || "";
   const [order, setOrder] = useState<TrackingOrder | null>(null);
   const [notifications, setNotifications] = useState<OrderNotification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [requiresSignIn, setRequiresSignIn] = useState(false);
   const [error, setError] = useState("");
@@ -293,7 +294,12 @@ export function TrackOrderPage({ orderId }: { orderId: string }) {
           throw notificationError;
         }
 
-        setNotifications((data ?? []) as OrderNotification[]);
+        const nextNotifications = (data ?? []) as OrderNotification[];
+        setNotifications(nextNotifications);
+        if (nextNotifications.length > 0 && nextNotifications[0].id !== lastAutoOpenedNotificationIdRef.current) {
+          lastAutoOpenedNotificationIdRef.current = nextNotifications[0].id;
+          setNotificationsOpen(true);
+        }
         return;
       }
 
@@ -308,7 +314,12 @@ export function TrackOrderPage({ orderId }: { orderId: string }) {
         throw notificationError;
       }
 
-      setNotifications((data ?? []) as OrderNotification[]);
+      const nextNotifications = (data ?? []) as OrderNotification[];
+      setNotifications(nextNotifications);
+      if (nextNotifications.length > 0 && nextNotifications[0].id !== lastAutoOpenedNotificationIdRef.current) {
+        lastAutoOpenedNotificationIdRef.current = nextNotifications[0].id;
+        setNotificationsOpen(true);
+      }
     } catch (notificationError) {
       console.warn("Order notifications unavailable:", notificationError);
       setNotifications([]);
@@ -432,7 +443,7 @@ export function TrackOrderPage({ orderId }: { orderId: string }) {
                 <td>${escapeHtml(item.name)}</td>
                 <td>${escapeHtml(String(item.size || ""))}</td>
                 <td>${escapeHtml(String(item.quantity || 0))}</td>
-                <td>${escapeHtml(formatCurrency(Number(item.price) * Number(item.quantity)))}</td>
+                <td>${escapeHtml(formatPrice(Number(item.price) * Number(item.quantity)))}</td>
               </tr>`
           )
           .join("")
@@ -463,7 +474,7 @@ export function TrackOrderPage({ orderId }: { orderId: string }) {
             <div class="row"><span>Tracking Code</span><strong>${escapeHtml(order.tracking_code || "")}</strong></div>
             <div class="row"><span>Reference</span><strong>${escapeHtml(order.payment_reference || "")}</strong></div>
             <div class="row"><span>Date</span><strong>${escapeHtml(formatDateTime(order.created_at))}</strong></div>
-            <div class="row"><span>Total</span><strong class="total">${escapeHtml(formatCurrency(order.total))}</strong></div>
+            <div class="row"><span>Total</span><strong class="total">${escapeHtml(formatPrice(order.total))}</strong></div>
           </div>
           <div class="box">
             <strong>Delivery Details</strong>
@@ -533,6 +544,10 @@ export function TrackOrderPage({ orderId }: { orderId: string }) {
                 <span className={`${styles.statusBadge} ${styles[status]}`}>
                   {statusLabel}
                 </span>
+                <button className={styles.refreshButton} type="button" onClick={() => setNotificationsOpen(true)}>
+                  <Bell size={16} />
+                  Updates
+                </button>
                 <button className={styles.refreshButton} type="button" onClick={downloadReceipt}>
                   <Download size={16} />
                   Receipt
@@ -543,6 +558,33 @@ export function TrackOrderPage({ orderId }: { orderId: string }) {
                 </button>
               </div>
             </section>
+
+            {notificationsOpen && (
+              <div className={styles.notificationPopover} role="dialog" aria-label="Order updates">
+                <div className={styles.popoverHeader}>
+                  <div className={styles.panelTitleWithIcon}>
+                    <Bell size={18} />
+                    <h2>Updates</h2>
+                  </div>
+                  <button type="button" onClick={() => setNotificationsOpen(false)} aria-label="Close updates">
+                    <X size={16} />
+                  </button>
+                </div>
+
+                <div className={styles.notificationList}>
+                  {notificationItems.map((notification) => (
+                    <div className={styles.notificationItem} key={notification.id}>
+                      <div className={styles.notificationDot} />
+                      <div>
+                        <strong>{notification.title}</strong>
+                        <p>{notification.message}</p>
+                        <span>{formatDateTime(notification.created_at)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <section className={styles.trackingGrid}>
               <div className={styles.timelinePanel}>
@@ -605,7 +647,7 @@ export function TrackOrderPage({ orderId }: { orderId: string }) {
                   </div>
                   <div>
                     <span>Total</span>
-                    <strong>{formatCurrency(order.total)}</strong>
+                    <strong>{formatPrice(order.total)}</strong>
                   </div>
                   {order.payment_reference && (
                     <div>
@@ -641,29 +683,6 @@ export function TrackOrderPage({ orderId }: { orderId: string }) {
               </aside>
             </section>
 
-            <section className={styles.notificationsPanel}>
-              <div className={styles.panelHeader}>
-                <div className={styles.panelTitleWithIcon}>
-                  <Bell size={18} />
-                  <h2>Updates</h2>
-                </div>
-                <span>{notificationItems.length} notice(s)</span>
-              </div>
-
-              <div className={styles.notificationList}>
-                {notificationItems.map((notification) => (
-                  <div className={styles.notificationItem} key={notification.id}>
-                    <div className={styles.notificationDot} />
-                    <div>
-                      <strong>{notification.title}</strong>
-                      <p>{notification.message}</p>
-                      <span>{formatDateTime(notification.created_at)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
             <section className={styles.itemsPanel}>
               <div className={styles.panelHeader}>
                 <h2>Items</h2>
@@ -679,7 +698,7 @@ export function TrackOrderPage({ orderId }: { orderId: string }) {
                         <h3>{item.name}</h3>
                         <p>Qty: {item.quantity} | Size: {item.size}</p>
                       </div>
-                      <strong>{formatCurrency(Number(item.price) * Number(item.quantity))}</strong>
+                      <strong>{formatPrice(Number(item.price) * Number(item.quantity))}</strong>
                     </div>
                   ))}
               </div>

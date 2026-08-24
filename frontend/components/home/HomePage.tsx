@@ -349,7 +349,7 @@ export function HomePage() {
 
             <div className={styles.contactDetail}>
               <h4>EMAIL US</h4>
-              <a href="mailto:hello@arame.com">hello@arame.com</a>
+              <a href="mailto:aramesupport@gmail.com">aramesupport@gmail.com</a>
             </div>
 
             <div className={styles.contactDetail}>
@@ -371,7 +371,7 @@ export function HomePage() {
               className={styles.sendBtn}
               type="button"
               onClick={() => {
-                window.location.href = "mailto:hello@arame.com";
+                window.location.href = "mailto:aramesupport@gmail.com";
               }}
             >
               Send Message {"\u2192"}

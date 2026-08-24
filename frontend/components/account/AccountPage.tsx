@@ -14,6 +14,7 @@ import {
   getSupabaseBrowserClient,
 } from "@/frontend/supabase/browser";
 import { openPaystackTransaction } from "@/frontend/payments/paystack";
+import { useCurrency } from "@/frontend/context/CurrencyContext";
 import { getOrderStatusLabel, getTrackingHref } from "@/frontend/orders/tracking";
 import styles from "./account-page.module.css";
 
@@ -140,6 +141,7 @@ const states = [
 
 export function AccountPage() {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
+  const { formatPrice } = useCurrency();
   const searchParams = useSearchParams();
   const [user, setUser] = useState<User | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
@@ -789,7 +791,7 @@ export function AccountPage() {
                               </div>
                               <div>
                                 <span className={styles.metaLabel}>TOTAL</span>
-                                <span className={styles.metaValue}>₦{Number(order.total).toFixed(2)}</span>
+                                <span className={styles.metaValue}>{formatPrice(order.total)}</span>
                               </div>
                               <div className={styles.orderRefCol}>
                                 <span className={styles.metaLabel}>ORDER ID</span>
@@ -820,7 +822,7 @@ export function AccountPage() {
                                     </p>
                                   </div>
                                   <div className={styles.orderItemPrice}>
-                                    ₦{(Number(item.price) * Number(item.quantity)).toFixed(2)}
+                                    {formatPrice(Number(item.price) * Number(item.quantity))}
                                   </div>
                                 </div>
                               ))}

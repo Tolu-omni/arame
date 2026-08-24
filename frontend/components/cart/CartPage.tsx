@@ -6,10 +6,12 @@ import Link from "next/link";
 import { Header } from "@/frontend/components/shared/Header";
 import { Footer } from "@/frontend/components/shared/Footer";
 import { useCart } from "@/frontend/context/CartContext";
+import { useCurrency } from "@/frontend/context/CurrencyContext";
 import styles from "./cart-page.module.css";
 
 export function CartPage() {
   const { items, subtotal, removeItem } = useCart();
+  const { formatPrice } = useCurrency();
 
   return (
     <div className={styles.cartPage}>
@@ -37,7 +39,7 @@ export function CartPage() {
                       Remove
                     </button>
                   </div>
-                  <strong>₦{(item.price * item.quantity).toFixed(2)}</strong>
+                  <strong>{formatPrice(item.price * item.quantity)}</strong>
                 </div>
               ))}
             </div>
@@ -46,7 +48,7 @@ export function CartPage() {
               <h2>Order Summary</h2>
               <div>
                 <span>Subtotal</span>
-                <strong>₦{subtotal.toFixed(2)}</strong>
+                <strong>{formatPrice(subtotal)}</strong>
               </div>
               <Link href="/checkout" className={styles.checkoutBtn}>
                 Checkout

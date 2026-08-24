@@ -8,13 +8,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Header } from "@/frontend/components/shared/Header";
 import { Footer } from "@/frontend/components/shared/Footer";
 import { useCart } from "@/frontend/context/CartContext";
+import { currencyOptions, useCurrency, type StoreCurrency } from "@/frontend/context/CurrencyContext";
 import { getSupabaseBrowserClient } from "@/frontend/supabase/browser";
 import { useToast } from "@/frontend/context/ToastContext";
 import { catalog, categoryFilters, sortOptions } from "@/frontend/shop/catalog";
 import type { Filter, Product } from "@/frontend/shop/types";
 import styles from "./shop-page.module.css";
-
-const formatCurrency = (price: number) => `\u20A6${Number(price).toFixed(2)}`;
 
 const buildFilterState = (filters: Filter[]) => {
   const open: Record<string, boolean> = {};
@@ -74,6 +73,7 @@ function PriceRange({
   max,
   minValue,
   maxValue,
+  formatPrice,
   onMinChange,
   onMaxChange,
 }: {
@@ -81,6 +81,7 @@ function PriceRange({
   max: string;
   minValue: number;
   maxValue: number;
+  formatPrice: (value: number) => string;
   onMinChange: (value: number) => void;
   onMaxChange: (value: number) => void;
 }) {
@@ -92,8 +93,8 @@ function PriceRange({
       <input type="range" min={rangeMin} max={rangeMax} value={minValue} onChange={(event) => onMinChange(Number(event.target.value))} />
       <input type="range" min={rangeMin} max={rangeMax} value={maxValue} onChange={(event) => onMaxChange(Number(event.target.value))} />
       <div className={styles.priceValues}>
-        <span>NGN {minValue}</span>
-        <span>NGN {maxValue}</span>
+        <span>{formatPrice(minValue)}</span>
+        <span>{formatPrice(maxValue)}</span>
       </div>
     </div>
   );
@@ -104,6 +105,7 @@ export function ShopPage({ products = [] }: { products?: Product[] }) {
   const searchParams = useSearchParams();
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const { addItem } = useCart();
+  const { currency, formatPrice, setCurrency } = useCurrency();
   const { addToast } = useToast();
 
   const [user, setUser] = useState<User | null>(null);
@@ -282,7 +284,7 @@ export function ShopPage({ products = [] }: { products?: Product[] }) {
 
               <div className={styles.productInfo}>
                 <h1>{selectedProduct.name}</h1>
-                <p className={styles.price}>{formatCurrency(selectedProduct.price)}</p>
+                <p className={styles.price}>{formatPrice(selectedProduct.price)}</p>
 
                 <div className={styles.optionGroup}>
                   <p>Size *</p>
@@ -393,6 +395,7 @@ export function ShopPage({ products = [] }: { products?: Product[] }) {
                         max={filter.max}
                         minValue={priceValues[filter.title]?.min ?? 0}
                         maxValue={priceValues[filter.title]?.max ?? 0}
+                        formatPrice={formatPrice}
                         onMinChange={(value) => updatePrice(filter.title, "min", value)}
                         onMaxChange={(value) => updatePrice(filter.title, "max", value)}
                       />
@@ -405,26 +408,42 @@ export function ShopPage({ products = [] }: { products?: Product[] }) {
                 <div className={styles.productsTop}>
                   <p>{visibleProducts.length} products</p>
 
-                  <div className={styles.sortBox}>
-                    <button onClick={() => setSortOpen((prev) => !prev)}>
-                      Sort by: {sortBy} <span>{sortOpen ? "\u2303" : "\u2304"}</span>
-                    </button>
-
-                    {sortOpen && (
-                      <div className={styles.sortDropdown}>
-                        {sortOptions.map((option) => (
-                          <button
-                            key={option}
-                            onClick={() => {
-                              setSortBy(option);
-                              setSortOpen(false);
-                            }}
-                          >
-                            {option}
-                          </button>
+                  <div className={styles.topControls}>
+                    <label className={styles.currencySelect}>
+                      <span>Currency</span>
+                      <select
+                        value={currency}
+                        onChange={(event) => setCurrency(event.target.value as StoreCurrency)}
+                      >
+                        {currencyOptions.map((option) => (
+                          <option key={option.code} value={option.code}>
+                            {option.label}
+                          </option>
                         ))}
-                      </div>
-                    )}
+                      </select>
+                    </label>
+
+                    <div className={styles.sortBox}>
+                      <button onClick={() => setSortOpen((prev) => !prev)}>
+                        Sort by: {sortBy} <span>{sortOpen ? "\u2303" : "\u2304"}</span>
+                      </button>
+
+                      {sortOpen && (
+                        <div className={styles.sortDropdown}>
+                          {sortOptions.map((option) => (
+                            <button
+                              key={option}
+                              onClick={() => {
+                                setSortBy(option);
+                                setSortOpen(false);
+                              }}
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -441,7 +460,7 @@ export function ShopPage({ products = [] }: { products?: Product[] }) {
                         </div>
 
                         <h3>{product.name}</h3>
-                        <p>{formatCurrency(product.price)}</p>
+                        <p>{formatPrice(product.price)}</p>
                       </button>
                     ))
                   ) : (

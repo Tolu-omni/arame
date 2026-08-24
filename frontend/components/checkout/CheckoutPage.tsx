@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { useCart } from "@/frontend/context/CartContext";
+import { useCurrency } from "@/frontend/context/CurrencyContext";
 import { getSupabaseBrowserClient } from "@/frontend/supabase/browser";
 import { Header } from "@/frontend/components/shared/Header";
 import { Footer } from "@/frontend/components/shared/Footer";
@@ -63,6 +64,7 @@ export function CheckoutPage() {
   const router = useRouter();
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const { items, subtotal: cartSubtotal, clearCart } = useCart();
+  const { formatPrice } = useCurrency();
 
   const [step, setStep] = useState<CheckoutStep>("details");
   const [user, setUser] = useState<User | null>(null);
@@ -477,7 +479,7 @@ export function CheckoutPage() {
                       ))}
 
                       <button type="button" className={styles.submitBtn} onClick={handleSavedCardPayment}>
-                        Pay with Saved Card {`\u20A6${subtotal.toFixed(2)}`}
+                        Pay with Saved Card {formatPrice(subtotal)}
                       </button>
                     </div>
                   )}
@@ -501,7 +503,7 @@ export function CheckoutPage() {
                     )}
 
                     <button type="submit" className={styles.submitBtn}>
-                      Pay with New Card {`\u20A6${subtotal.toFixed(2)}`}
+                      Pay with New Card {formatPrice(subtotal)}
                     </button>
                   </form>
                 </div>
@@ -555,7 +557,7 @@ export function CheckoutPage() {
 
                   <div className={styles.receiptTotal}>
                     <span>Total Charged:</span>
-                    <strong>₦{(subtotal).toFixed(2)}</strong>
+                    <strong>{formatPrice(subtotal)}</strong>
                   </div>
                 </div>
                 </div>
@@ -587,7 +589,7 @@ export function CheckoutPage() {
                         <span>Qty: {item.quantity} | {item.size}</span>
                       </div>
                       <span className={styles.summaryItemPrice}>
-                        ₦{(item.price * item.quantity).toFixed(2)}
+                        {formatPrice(item.price * item.quantity)}
                       </span>
                     </div>
                   ))}
@@ -596,7 +598,7 @@ export function CheckoutPage() {
                 <div className={styles.summaryTotalSection}>
                   <div className={styles.summaryRow}>
                     <span>Subtotal</span>
-                    <span>₦{subtotal.toFixed(2)}</span>
+                    <span>{formatPrice(subtotal)}</span>
                   </div>
                   <div className={styles.summaryRow}>
                     <span>Shipping</span>
@@ -605,7 +607,7 @@ export function CheckoutPage() {
                   <div className={styles.summaryDivider} />
                   <div className={`${styles.summaryRow} ${styles.totalRow}`}>
                     <span>Grand Total</span>
-                    <strong>₦{subtotal.toFixed(2)}</strong>
+                    <strong>{formatPrice(subtotal)}</strong>
                   </div>
                 </div>
               </div>
