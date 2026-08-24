@@ -6,6 +6,7 @@ import {
   type CheckoutItemInput,
   type ShippingInput,
 } from "@/backend/paystack/orders";
+import { sendOrderReceiptEmail } from "@/backend/email/orders";
 
 export const dynamic = "force-dynamic";
 
@@ -110,11 +111,25 @@ export async function POST(request: Request) {
         total: fromKobo(charge.amount),
         user_id: userData.user.id,
       })
-      .select("id,tracking_code")
+      .select("id,items,payment_reference,shipping_address,total,tracking_code")
       .single();
 
     if (orderError) {
       throw orderError;
+    }
+
+    const emailResult = await sendOrderReceiptEmail({
+      fallbackEmail: email,
+      items: order.items,
+      orderId: order.id,
+      paymentReference: order.payment_reference,
+      shipping: order.shipping_address,
+      total: order.total,
+      trackingCode: order.tracking_code,
+    });
+
+    if (!emailResult.sent) {
+      console.warn("Saved-card receipt email was not sent:", emailResult.reason);
     }
 
     return Response.json({

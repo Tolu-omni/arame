@@ -791,22 +791,35 @@ export function AdminPage() {
     try {
       setUpdatingOrderId(orderId);
 
-      const { error } = await supabase
-        .from("orders")
-        .update({
-          status,
-          status_updated_at: new Date().toISOString(),
-        })
-        .eq("id", orderId);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
 
-      if (error) {
-        throw error;
+      if (!accessToken) {
+        throw new Error("Please sign in again before updating order status.");
+      }
+
+      const response = await fetch(`/api/admin/orders/${orderId}/status`, {
+        body: JSON.stringify({ status }),
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        method: "PATCH",
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Unable to update order status.");
       }
 
       setAdminOrders((current) =>
         current.map((order) =>
           order.id === orderId
-            ? { ...order, status, status_updated_at: new Date().toISOString() }
+            ? {
+                ...order,
+                status: result.order?.status || status,
+                status_updated_at: result.order?.status_updated_at || new Date().toISOString(),
+              }
             : order
         )
       );

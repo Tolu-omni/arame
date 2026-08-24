@@ -1,3 +1,5 @@
+import { createHmac, timingSafeEqual } from "crypto";
+
 const PAYSTACK_BASE_URL = "https://api.paystack.co";
 
 export type PaystackAuthorization = {
@@ -46,6 +48,24 @@ export function isPaystackTestMode() {
   const secretKey = getPaystackSecretKey();
   const publicKey = getPaystackPublicKey();
   return secretKey.startsWith("sk_test_") || publicKey.startsWith("pk_test_");
+}
+
+export function verifyPaystackWebhookSignature(rawBody: string, signature: string | null) {
+  const secretKey = getPaystackSecretKey();
+
+  if (!secretKey || !signature) {
+    return false;
+  }
+
+  const expected = createHmac("sha512", secretKey).update(rawBody).digest("hex");
+  const expectedBuffer = Buffer.from(expected, "hex");
+  const actualBuffer = Buffer.from(signature, "hex");
+
+  if (expectedBuffer.length !== actualBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(expectedBuffer, actualBuffer);
 }
 
 export function toKobo(amount: number) {

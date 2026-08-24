@@ -31,3 +31,18 @@ export function getSupabaseServerClient(accessToken?: string) {
       : {}),
   });
 }
+
+export function getSupabaseServiceRoleClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!hasValidSupabaseConfig(url, serviceRoleKey)) {
+    return null;
+  }
+
+  return createClient(url as string, serviceRoleKey as string, {
+    auth: {
+      persistSession: false,
+    },
+  });
+}

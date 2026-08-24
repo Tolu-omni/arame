@@ -10,7 +10,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "images:upload": "node scripts/upload-product-images-to-supabase.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.0",

@@ -11,6 +11,7 @@ import {
   type CheckoutItemInput,
   type ShippingInput,
 } from "@/backend/paystack/orders";
+import { sendOrderReceiptEmail } from "@/backend/email/orders";
 
 export const dynamic = "force-dynamic";
 
@@ -140,7 +141,7 @@ export async function POST(request: Request) {
         total: fromKobo(paystackTransaction.amount),
         user_id: user?.id || null,
       })
-      .select("id,tracking_code")
+      .select("id,items,payment_reference,shipping_address,total,tracking_code")
       .single();
 
     if (error) {
@@ -161,6 +162,20 @@ export async function POST(request: Request) {
         reusable: Boolean(authorization.reusable),
         user_id: user.id,
       });
+    }
+
+    const emailResult = await sendOrderReceiptEmail({
+      fallbackEmail: paystackTransaction.customer?.email || user?.email,
+      items: data.items,
+      orderId: data.id,
+      paymentReference: data.payment_reference,
+      shipping: data.shipping_address,
+      total: data.total,
+      trackingCode: data.tracking_code,
+    });
+
+    if (!emailResult.sent) {
+      console.warn("Order receipt email was not sent:", emailResult.reason);
     }
 
     return Response.json({

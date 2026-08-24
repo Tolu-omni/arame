@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import styles from "@/frontend/components/home/home-page.module.css";
 import { useToast } from "@/frontend/context/ToastContext";
 
@@ -100,30 +101,30 @@ export function Footer() {
         <div className={styles.footerCol}>
           <h5>SHOP</h5>
           <ul>
-            <li><a href="/shop">All Fragrances</a></li>
-            <li><a href="/shop">Eau de Parfum</a></li>
-            <li><a href="/shop">Discovery Sets</a></li>
-            <li><a href="/shop">Candles &amp; Home</a></li>
+            <li><Link href="/shop">All Fragrances</Link></li>
+            <li><Link href="/shop">Eau de Parfum</Link></li>
+            <li><Link href="/shop">Discovery Sets</Link></li>
+            <li><Link href="/shop">Candles &amp; Home</Link></li>
           </ul>
         </div>
 
         <div className={styles.footerCol}>
           <h5>COMPANY</h5>
           <ul>
-            <li><a href="#story">Our Story</a></li>
-            <li><a href="/blog">Sustainability</a></li>
-            <li><a href="/blog">Press</a></li>
-            <li><a href="/blog">Careers</a></li>
+            <li><Link href="/#story">Our Story</Link></li>
+            <li><Link href="/blog">Sustainability</Link></li>
+            <li><Link href="/blog">Press</Link></li>
+            <li><Link href="/blog">Careers</Link></li>
           </ul>
         </div>
 
         <div className={styles.footerCol}>
           <h5>SUPPORT</h5>
           <ul>
-            <li><a href="#contact">Contact Us</a></li>
-            <li><a href="#faq">FAQs</a></li>
-            <li><a href="/shop">Shipping</a></li>
-            <li><a href="/shop">Returns</a></li>
+            <li><Link href="/#contact">Contact Us</Link></li>
+            <li><Link href="/#faq">FAQs</Link></li>
+            <li><Link href="/shipping">Shipping</Link></li>
+            <li><Link href="/returns">Returns</Link></li>
           </ul>
         </div>
       </div>
@@ -132,8 +133,8 @@ export function Footer() {
         <div>{"\u00A9"} 2026 ARAM{"\u00C8"}. ALL RIGHTS RESERVED.</div>
 
         <div className={styles.footerBottomLinks}>
-          <a href="/privacy">Privacy Policy</a>
-          <a href="/terms">Terms of Service</a>
+          <Link href="/privacy">Privacy Policy</Link>
+          <Link href="/terms">Terms of Service</Link>
         </div>
       </div>
     </footer>

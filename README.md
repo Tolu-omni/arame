@@ -34,3 +34,31 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Arame Production Setup
+
+Add these environment variables in Vercel:
+
+```bash
+NEXT_PUBLIC_SITE_URL=https://arame-rose.vercel.app
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY=your_paystack_public_key
+PAYSTACK_SECRET_KEY=your_paystack_secret_key
+RESEND_API_KEY=your_resend_api_key
+EMAIL_FROM=Arame <receipts@yourdomain.com>
+ADMIN_EMAILS=toluomoniyi9@gmail.com,toluomoniyi@gmail.com,tolu@arame.com
+```
+
+Set the Paystack webhook URL to:
+
+```bash
+https://arame-rose.vercel.app/api/paystack/webhook
+```
+
+After adding `SUPABASE_SERVICE_ROLE_KEY` locally, upload all current product images to Supabase Storage and update the live product rows:
+
+```bash
+npm run images:upload
+```
