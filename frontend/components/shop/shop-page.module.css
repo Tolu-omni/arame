@@ -75,7 +75,6 @@
 }
 
 .browseList button,
-.filterOption button,
 .filterHeader,
 .sortBox button,
 .productCard,
@@ -137,28 +136,31 @@
   display: flex;
   align-items: center;
   gap: 12px;
-}
-
-.filterOption button {
-  font-size: 16px;
   color: #2e231d;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1.35;
 }
 
-.checkbox {
+.filterOption input {
   width: 20px;
   height: 20px;
+  flex: 0 0 20px;
+  margin: 0;
   border: 1px solid #8b7c72;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
+  accent-color: #97452f;
+  cursor: pointer;
+}
+
+.filterOption span {
+  min-width: 0;
 }
 
 .priceRange {
   margin-top: 20px;
 }
 
-.priceRange input {
+.priceRange input[type="range"] {
   width: 100%;
   accent-color: #402a24;
 }

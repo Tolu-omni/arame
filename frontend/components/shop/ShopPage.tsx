@@ -40,14 +40,6 @@ const buildFilterState = (filters: Filter[]) => {
 
 const defaultFilterState = buildFilterState(categoryFilters["All Products"]);
 
-function Checkbox({ checked, onChange }: { checked: boolean; onChange: () => void }) {
-  return (
-    <button type="button" onClick={onChange} className={styles.checkbox}>
-      {checked ? "\u2713" : ""}
-    </button>
-  );
-}
-
 function QuantitySelector({
   quantity,
   setQuantity,
@@ -71,18 +63,14 @@ function QuantitySelector({
 function PriceRange({
   min,
   max,
-  minValue,
   maxValue,
   formatPrice,
-  onMinChange,
   onMaxChange,
 }: {
   min: string;
   max: string;
-  minValue: number;
   maxValue: number;
   formatPrice: (value: number) => string;
-  onMinChange: (value: number) => void;
   onMaxChange: (value: number) => void;
 }) {
   const rangeMin = Number(min.replace(/[^\d]/g, "")) || 0;
@@ -90,11 +78,17 @@ function PriceRange({
 
   return (
     <div className={styles.priceRange}>
-      <input type="range" min={rangeMin} max={rangeMax} value={minValue} onChange={(event) => onMinChange(Number(event.target.value))} />
-      <input type="range" min={rangeMin} max={rangeMax} value={maxValue} onChange={(event) => onMaxChange(Number(event.target.value))} />
+      <input
+        aria-label="Maximum price"
+        type="range"
+        min={rangeMin}
+        max={rangeMax}
+        value={maxValue}
+        onChange={(event) => onMaxChange(Number(event.target.value))}
+      />
       <div className={styles.priceValues}>
-        <span>{formatPrice(minValue)}</span>
-        <span>{formatPrice(maxValue)}</span>
+        <span>{formatPrice(rangeMin)}</span>
+        <span>Up to {formatPrice(maxValue)}</span>
       </div>
     </div>
   );
@@ -210,7 +204,7 @@ export function ShopPage({ products = [] }: { products?: Product[] }) {
     });
   };
 
-  const updatePrice = (filterTitle: string, type: "min" | "max", value: number) => {
+  const updatePrice = (filterTitle: string, value: number) => {
     setPriceValues((prev) => {
       const current = prev[filterTitle];
       if (!current) return prev;
@@ -218,8 +212,8 @@ export function ShopPage({ products = [] }: { products?: Product[] }) {
       return {
         ...prev,
         [filterTitle]: {
-          min: type === "min" ? Math.min(value, current.max) : current.min,
-          max: type === "max" ? Math.max(value, current.min) : current.max,
+          min: current.min,
+          max: Math.max(value, current.min),
         },
       };
     });
@@ -376,15 +370,14 @@ export function ShopPage({ products = [] }: { products?: Product[] }) {
                     {openFilters[filter.title] && filter.type === "options" && (
                       <div className={styles.filterOptions}>
                         {filter.options.map((option) => (
-                          <div key={option} className={styles.filterOption}>
-                            <Checkbox
+                          <label key={option} className={styles.filterOption}>
+                            <input
+                              type="checkbox"
                               checked={selectedOptions[filter.title]?.includes(option) || false}
                               onChange={() => toggleOption(filter.title, option)}
                             />
-                            <button onClick={() => toggleOption(filter.title, option)}>
-                              {option}
-                            </button>
-                          </div>
+                            <span>{option}</span>
+                          </label>
                         ))}
                       </div>
                     )}
@@ -393,11 +386,9 @@ export function ShopPage({ products = [] }: { products?: Product[] }) {
                       <PriceRange
                         min={filter.min}
                         max={filter.max}
-                        minValue={priceValues[filter.title]?.min ?? 0}
                         maxValue={priceValues[filter.title]?.max ?? 0}
                         formatPrice={formatPrice}
-                        onMinChange={(value) => updatePrice(filter.title, "min", value)}
-                        onMaxChange={(value) => updatePrice(filter.title, "max", value)}
+                        onMaxChange={(value) => updatePrice(filter.title, value)}
                       />
                     )}
                   </div>
