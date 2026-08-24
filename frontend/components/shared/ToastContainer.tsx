@@ -22,9 +22,9 @@ export function ToastContainer() {
           <motion.div
             key={toast.id}
             layout
-            initial={{ opacity: 0, y: 30, scale: 0.95 }}
+            initial={{ opacity: 0, y: -18, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9, y: 15, transition: { duration: 0.2 } }}
+            exit={{ opacity: 0, scale: 0.92, y: -10, transition: { duration: 0.18 } }}
             className={`${styles.toast} ${styles[toast.type]}`}
           >
             <div className={styles.icon}>{icons[toast.type]}</div>

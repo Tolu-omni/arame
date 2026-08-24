@@ -1,6 +1,6 @@
 .container {
   position: fixed;
-  bottom: 24px;
+  top: 88px;
   right: 24px;
   display: flex;
   flex-direction: column;
@@ -22,7 +22,7 @@
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(198, 164, 63, 0.25); /* Elegant gold border */
-  box-shadow: 0 10px 30px rgba(42, 30, 18, 0.12);
+  box-shadow: 0 18px 42px rgba(42, 30, 18, 0.16);
   color: #2a1e12;
   font-family: inherit;
   font-size: 0.92rem;
@@ -34,12 +34,12 @@
 /* Glassmorphism custom glow for different states */
 .toast.success {
   border-color: rgba(151, 69, 47, 0.35); /* terracotta border */
-  box-shadow: 0 10px 30px rgba(151, 69, 47, 0.08), 0 4px 12px rgba(42, 30, 18, 0.08);
+  box-shadow: 0 18px 42px rgba(151, 69, 47, 0.11), 0 8px 18px rgba(42, 30, 18, 0.1);
 }
 
 .toast.error {
   border-color: rgba(239, 64, 40, 0.35);
-  box-shadow: 0 10px 30px rgba(239, 64, 40, 0.08), 0 4px 12px rgba(42, 30, 18, 0.08);
+  box-shadow: 0 18px 42px rgba(239, 64, 40, 0.11), 0 8px 18px rgba(42, 30, 18, 0.1);
 }
 
 .toast.warning {
@@ -96,7 +96,7 @@
 /* Mobile responsive styles */
 @media (max-width: 640px) {
   .container {
-    bottom: 16px;
+    top: 76px;
     right: 50%;
     transform: translateX(50%);
     max-width: 480px;

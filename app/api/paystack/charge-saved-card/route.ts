@@ -1,5 +1,6 @@
 import { chargePaystackAuthorization, fromKobo, generatePaystackReference } from "@/backend/paystack/client";
 import { getSupabaseServerClient } from "@/backend/supabase/server";
+import { getSiteUrl } from "@/backend/lib/site";
 import {
   buildVerifiedOrderItems,
   getBearerToken,
@@ -81,14 +82,30 @@ export async function POST(request: Request) {
     const charge = await chargePaystackAuthorization({
       amount: total,
       authorizationCode: savedCard.authorization_code,
+      callbackUrl: getSiteUrl("/checkout?payment=paystack-saved-card", request),
       email,
       metadata: {
+        cancel_action: getSiteUrl("/checkout", request),
         payment_method_id: savedCard.id,
         purpose: "saved_card_checkout",
         shipping: body.shipping || null,
       },
       reference: generatePaystackReference("ARAME-SAVED"),
     });
+
+    if (charge.paused && charge.authorization_url) {
+      return Response.json({
+        authorizationUrl: charge.authorization_url,
+        payment: {
+          last4: savedCard.last4 || "",
+          methodType: savedCard.method_type || "Card",
+          reference: charge.reference,
+        },
+        reference: charge.reference,
+        requiresAction: true,
+        total,
+      });
+    }
 
     if (charge.status !== "success") {
       return Response.json(

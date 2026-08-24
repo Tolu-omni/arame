@@ -2,16 +2,16 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useState, useEffect, useMemo } from "react";
+import { useCallback, useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
+import type { CartItem } from "@/frontend/cart/types";
 import { useCart } from "@/frontend/context/CartContext";
 import { useCurrency } from "@/frontend/context/CurrencyContext";
 import { getSupabaseBrowserClient } from "@/frontend/supabase/browser";
 import { Header } from "@/frontend/components/shared/Header";
 import { Footer } from "@/frontend/components/shared/Footer";
-import { openPaystackTransaction } from "@/frontend/payments/paystack";
 import { getTrackingHref } from "@/frontend/orders/tracking";
 import {
   ShieldCheck,
@@ -42,6 +42,19 @@ type PaymentMethod = {
   method_type: string;
 };
 
+type PendingCheckoutPayment = {
+  createdAt: number;
+  items: CartItem[];
+  paymentLabel?: string;
+  reference: string;
+  saveCard: boolean;
+  shipping: ShippingForm;
+  total: number;
+};
+
+const checkoutPaymentStorageKey = "arame:paystack:checkout";
+const savedCardPaymentStorageKey = "arame:paystack:saved-card-checkout";
+
 const emptyShipping: ShippingForm = {
   first_name: "",
   last_name: "",
@@ -59,6 +72,35 @@ const nigerianStates = [
   "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara", "Lagos", "Nasarawa", "Niger",
   "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara"
 ];
+
+function getPaystackReturn() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const reference = params.get("reference") || params.get("trxref") || "";
+  const payment = params.get("payment") || "";
+
+  if (!reference || !payment.startsWith("paystack")) {
+    return null;
+  }
+
+  return { payment, reference };
+}
+
+function readPendingPayment(storageKey: string) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const pending = window.sessionStorage.getItem(storageKey);
+    return pending ? (JSON.parse(pending) as PendingCheckoutPayment) : null;
+  } catch {
+    return null;
+  }
+}
 
 export function CheckoutPage() {
   const router = useRouter();
@@ -80,6 +122,10 @@ export function CheckoutPage() {
   const [receiptPaymentReference, setReceiptPaymentReference] = useState("");
   const [receiptTotal, setReceiptTotal] = useState(0);
   const [errorMessage, setErrorMessage] = useState("");
+  const [handlingPaystackReturn, setHandlingPaystackReturn] = useState(() =>
+    Boolean(getPaystackReturn())
+  );
+  const handledPaystackReferenceRef = useRef("");
   const subtotal = step === "success" ? receiptTotal : cartSubtotal;
 
   // Load user default address if logged in
@@ -90,9 +136,12 @@ export function CheckoutPage() {
       if (data.session?.user) {
         const currentUser = data.session.user;
         setUser(currentUser);
+        const paystackReturn = getPaystackReturn();
 
-        // Prefill email
-        setShipping(prev => ({ ...prev, email: currentUser.email || "" }));
+        if (!paystackReturn) {
+          // Prefill email
+          setShipping(prev => ({ ...prev, email: currentUser.email || "" }));
+        }
 
         // Fetch user default address
         const { data: addresses } = await supabase
@@ -102,7 +151,7 @@ export function CheckoutPage() {
           .eq("is_default", true)
           .maybeSingle();
 
-        if (addresses) {
+        if (addresses && !paystackReturn) {
           setShipping(prev => ({
             ...prev,
             first_name: addresses.first_name || "",
@@ -137,19 +186,18 @@ export function CheckoutPage() {
 
   // If cart is empty and not in success state, redirect to shop
   useEffect(() => {
-    if (items.length === 0 && step !== "success") {
+    if (items.length === 0 && step !== "success" && !handlingPaystackReturn) {
       router.push("/shop");
     }
-  }, [items, step, router]);
+  }, [handlingPaystackReturn, items, step, router]);
 
-  const paystackPublicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || "";
   const selectedPaymentMethod = useMemo(() => {
     return paymentMethods.find((method) => method.id === selectedPaymentMethodId) ?? null;
   }, [paymentMethods, selectedPaymentMethodId]);
   const cardBrand = selectedPaymentMethod?.method_type.toLowerCase() || "generic";
   const cardNumberDisplay = selectedPaymentMethod
     ? `\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 ${selectedPaymentMethod.last4}`
-    : "PAYSTACK TEST CHECKOUT";
+    : "PAYSTACK SECURE CHECKOUT";
   const cardholderDisplay = `${shipping.first_name} ${shipping.last_name}`.trim() || "CUSTOMER";
   const trackingHref = orderId ? getTrackingHref(orderId, trackingCode) : "/account?view=orders";
 
@@ -158,16 +206,16 @@ export function CheckoutPage() {
     setStep("payment");
   };
 
-  const getSessionAccessToken = async () => {
+  const getSessionAccessToken = useCallback(async () => {
     if (!supabase) {
       return "";
     }
 
     const { data } = await supabase.auth.getSession();
     return data.session?.access_token || "";
-  };
+  }, [supabase]);
 
-  const completeOrder = async ({
+  const completeOrder = useCallback(async ({
     orderId: nextOrderId,
     paymentLabel,
     paymentReference,
@@ -187,15 +235,93 @@ export function CheckoutPage() {
     setReceiptTotal(total);
     clearCart();
     setStep("success");
-  };
+  }, [clearCart]);
+
+  useEffect(() => {
+    const paystackReturn = getPaystackReturn();
+
+    if (!paystackReturn || handledPaystackReferenceRef.current === paystackReturn.reference) {
+      return;
+    }
+
+    const returnReference = paystackReturn.reference;
+    handledPaystackReferenceRef.current = returnReference;
+    setHandlingPaystackReturn(true);
+    setStep("processing");
+    setErrorMessage("");
+
+    const storageKey =
+      paystackReturn.payment === "paystack-saved-card"
+        ? savedCardPaymentStorageKey
+        : checkoutPaymentStorageKey;
+    const pending = readPendingPayment(storageKey);
+
+    if (!pending) {
+      setErrorMessage("Payment returned, but the checkout details expired. Please try again.");
+      setHandlingPaystackReturn(false);
+      setStep("payment");
+      return;
+    }
+
+    if (pending.reference !== returnReference) {
+      setErrorMessage("Payment reference does not match this checkout session.");
+      setHandlingPaystackReturn(false);
+      setStep("payment");
+      return;
+    }
+
+    const pendingPayment = pending;
+    setShipping(pending.shipping);
+
+    async function verifyReturnedPayment() {
+      try {
+        const accessToken = await getSessionAccessToken();
+        const response = await fetch("/api/paystack/verify", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          },
+          body: JSON.stringify({
+            items: pendingPayment.items,
+            purpose: "checkout",
+            reference: returnReference,
+            saveCard: pendingPayment.saveCard,
+            shipping: pendingPayment.shipping,
+          }),
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || "Payment verification failed.");
+        }
+
+        window.sessionStorage.removeItem(storageKey);
+        window.history.replaceState(null, "", "/checkout");
+
+        await completeOrder({
+          orderId: result.orderId,
+          paymentLabel: pendingPayment.paymentLabel || (result.payment?.last4
+            ? `${result.payment.methodType || "Card"} ending in ${result.payment.last4}`
+            : "Paystack card"),
+          paymentReference: result.payment?.reference || returnReference,
+          trackingCode: result.trackingCode,
+          total: Number(result.total || pendingPayment.total),
+        });
+      } catch (error) {
+        console.error("Paystack return verification failed:", error);
+        setErrorMessage(error instanceof Error ? error.message : "Unable to verify payment.");
+        setStep("payment");
+      } finally {
+        setHandlingPaystackReturn(false);
+      }
+    }
+
+    void verifyReturnedPayment();
+  }, [completeOrder, getSessionAccessToken]);
 
   const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!paystackPublicKey) {
-      setErrorMessage("Add NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY to .env.local first.");
-      return;
-    }
 
     if (!shipping.email) {
       setErrorMessage("Enter an email address before payment.");
@@ -206,20 +332,8 @@ export function CheckoutPage() {
     setStep("processing");
 
     try {
-      const transaction = await openPaystackTransaction({
-        amount: Math.round(cartSubtotal * 100),
-        channels: ["card"],
-        currency: "NGN",
-        email: shipping.email,
-        key: paystackPublicKey,
-        metadata: {
-          cart_items: items.length,
-          purpose: "checkout",
-          save_card: savePaymentMethod,
-        },
-      });
       const accessToken = await getSessionAccessToken();
-      const response = await fetch("/api/paystack/verify", {
+      const response = await fetch("/api/paystack/initialize", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -228,7 +342,6 @@ export function CheckoutPage() {
         body: JSON.stringify({
           items,
           purpose: "checkout",
-          reference: transaction.reference,
           saveCard: savePaymentMethod,
           shipping,
         }),
@@ -236,21 +349,25 @@ export function CheckoutPage() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || "Payment verification failed.");
+        throw new Error(result.error || "Unable to start Paystack payment.");
       }
 
-      await completeOrder({
-        orderId: result.orderId,
-        paymentLabel: result.payment?.last4
-          ? `${result.payment.methodType || "Card"} ending in ${result.payment.last4}`
-          : "Paystack card",
-        paymentReference: result.payment?.reference || transaction.reference,
-        trackingCode: result.trackingCode,
-        total: Number(result.total || cartSubtotal),
-      });
+      window.sessionStorage.setItem(
+        checkoutPaymentStorageKey,
+        JSON.stringify({
+          createdAt: Date.now(),
+          items,
+          reference: result.reference,
+          saveCard: savePaymentMethod,
+          shipping,
+          total: Number(result.total || cartSubtotal),
+        } satisfies PendingCheckoutPayment)
+      );
+
+      window.location.assign(result.authorizationUrl);
     } catch (error) {
       console.error("Paystack checkout failed:", error);
-      setErrorMessage(error instanceof Error ? error.message : "Unable to complete payment.");
+      setErrorMessage(error instanceof Error ? error.message : "Unable to start Paystack payment.");
       setStep("payment");
     }
   };
@@ -282,6 +399,26 @@ export function CheckoutPage() {
 
       if (!response.ok) {
         throw new Error(result.error || "Saved card payment failed.");
+      }
+
+      if (result.requiresAction && result.authorizationUrl) {
+        window.sessionStorage.setItem(
+          savedCardPaymentStorageKey,
+          JSON.stringify({
+            createdAt: Date.now(),
+            items,
+            paymentLabel: result.payment?.last4
+              ? `${result.payment.methodType || "Card"} ending in ${result.payment.last4}`
+              : "Saved Paystack card",
+            reference: result.reference,
+            saveCard: false,
+            shipping,
+            total: Number(result.total || cartSubtotal),
+          } satisfies PendingCheckoutPayment)
+        );
+
+        window.location.assign(result.authorizationUrl);
+        return;
       }
 
       await completeOrder({
@@ -488,7 +625,7 @@ export function CheckoutPage() {
 
                     <div className={styles.secureNotice}>
                       <ShieldCheck size={18} className={styles.secureIcon} />
-                      <span>Card details open inside Paystack test checkout. Arame stores only verified payment references and safe card metadata.</span>
+                      <span>Card details open on Paystack&apos;s secure checkout. Arame stores only verified payment references and safe card metadata.</span>
                     </div>
 
                     {user && (
@@ -542,7 +679,7 @@ export function CheckoutPage() {
                   )}
                   <div className={styles.receiptRow}>
                     <span>Mode:</span>
-                    <strong>Paystack Test</strong>
+                    <strong>Paystack verified</strong>
                   </div>
                   <div className={styles.receiptRow}>
                     <span>Delivered To:</span>
@@ -622,7 +759,7 @@ export function CheckoutPage() {
           <div className={styles.spinnerWrap}>
             <div className={styles.spinner} />
             <p>Processing transaction securely...</p>
-            <span>Do not refresh or close this tab</span>
+            <span>We will continue after Paystack confirms the payment</span>
           </div>
         </div>
       )}

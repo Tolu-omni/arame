@@ -19,15 +19,24 @@ export type PaystackCustomer = {
 };
 
 export type PaystackTransactionData = {
+  access_code?: string;
   amount: number;
   authorization?: PaystackAuthorization;
+  authorization_url?: string;
   channel?: string;
   currency?: string;
   customer?: PaystackCustomer;
   gateway_response?: string;
   paid_at?: string;
+  paused?: boolean;
   reference: string;
   status: string;
+};
+
+export type PaystackInitializationData = {
+  access_code: string;
+  authorization_url: string;
+  reference: string;
 };
 
 type PaystackResponse<T> = {
@@ -113,15 +122,46 @@ export async function verifyPaystackTransaction(reference: string) {
   );
 }
 
+export async function initializePaystackTransaction({
+  amount,
+  callbackUrl,
+  channels = ["card"],
+  email,
+  metadata,
+  reference,
+}: {
+  amount: number;
+  callbackUrl: string;
+  channels?: string[];
+  email: string;
+  metadata?: Record<string, unknown>;
+  reference: string;
+}) {
+  return paystackFetch<PaystackInitializationData>("/transaction/initialize", {
+    method: "POST",
+    body: JSON.stringify({
+      amount: String(toKobo(amount)),
+      callback_url: callbackUrl,
+      channels,
+      currency: "NGN",
+      email,
+      metadata: metadata ? JSON.stringify(metadata) : undefined,
+      reference,
+    }),
+  });
+}
+
 export async function chargePaystackAuthorization({
   amount,
   authorizationCode,
+  callbackUrl,
   email,
   metadata,
   reference,
 }: {
   amount: number;
   authorizationCode: string;
+  callbackUrl?: string;
   email: string;
   metadata?: Record<string, unknown>;
   reference: string;
@@ -131,6 +171,7 @@ export async function chargePaystackAuthorization({
     body: JSON.stringify({
       amount: String(toKobo(amount)),
       authorization_code: authorizationCode,
+      callback_url: callbackUrl,
       channels: ["card"],
       currency: "NGN",
       email,

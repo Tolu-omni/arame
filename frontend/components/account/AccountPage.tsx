@@ -13,7 +13,6 @@ import {
   getAuthRedirectUrl,
   getSupabaseBrowserClient,
 } from "@/frontend/supabase/browser";
-import { openPaystackTransaction } from "@/frontend/payments/paystack";
 import { useCurrency } from "@/frontend/context/CurrencyContext";
 import { getOrderStatusLabel, getTrackingHref } from "@/frontend/orders/tracking";
 import styles from "./account-page.module.css";
@@ -70,6 +69,12 @@ type OrderRow = {
   total: number | string;
 };
 
+type PendingCardAuthorization = {
+  createdAt: number;
+  label: string;
+  reference: string;
+};
+
 const emptyProfile: ProfileForm = {
   display_name: "",
   title: "",
@@ -98,6 +103,37 @@ const emptyPayment: PaymentForm = {
   method_type: "Card",
   last4: "",
 };
+
+const cardAuthorizationStorageKey = "arame:paystack:add-card";
+
+function getPaystackCardReturn() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const reference = params.get("reference") || params.get("trxref") || "";
+  const payment = params.get("payment") || "";
+
+  if (payment !== "paystack-add-card" || !reference) {
+    return null;
+  }
+
+  return { reference };
+}
+
+function readPendingCardAuthorization() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const pending = window.sessionStorage.getItem(cardAuthorizationStorageKey);
+    return pending ? (JSON.parse(pending) as PendingCardAuthorization) : null;
+  } catch {
+    return null;
+  }
+}
 
 const states = [
   "Abia",
@@ -160,6 +196,7 @@ export function AccountPage() {
   const [paymentForm, setPaymentForm] = useState<PaymentForm>(emptyPayment);
   const [savingPayment, setSavingPayment] = useState(false);
   const loggedSignInEventRef = useRef<string | null>(null);
+  const handledCardAuthorizationRef = useRef<string | null>(null);
 
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
@@ -167,7 +204,6 @@ export function AccountPage() {
 
   const configured = Boolean(supabase);
   const showOrders = searchParams.get("view") === "orders";
-  const paystackPublicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || "";
 
   useEffect(() => {
     if (!supabase) return;
@@ -285,6 +321,80 @@ export function AccountPage() {
     return () => {
       cancelled = true;
     };
+  }, [supabase, user]);
+
+  useEffect(() => {
+    const paystackReturn = getPaystackCardReturn();
+
+    if (
+      !paystackReturn ||
+      !supabase ||
+      !user ||
+      handledCardAuthorizationRef.current === paystackReturn.reference
+    ) {
+      return;
+    }
+
+    const returnReference = paystackReturn.reference;
+    handledCardAuthorizationRef.current = returnReference;
+    const client = supabase;
+    setSavingPayment(true);
+    setMessage("Completing secure card authorization...");
+
+    const pending = readPendingCardAuthorization();
+
+    if (!pending) {
+      setMessage("Card authorization returned, but the saved card details expired. Please try again.");
+      setSavingPayment(false);
+      return;
+    }
+
+    if (pending.reference !== returnReference) {
+      setMessage("Card authorization reference does not match this session.");
+      setSavingPayment(false);
+      return;
+    }
+
+    const pendingAuthorization = pending;
+
+    async function verifyCardAuthorization() {
+      try {
+        const { data: sessionData } = await client.auth.getSession();
+        const response = await fetch("/api/paystack/verify", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(sessionData.session?.access_token
+              ? { Authorization: `Bearer ${sessionData.session.access_token}` }
+              : {}),
+          },
+          body: JSON.stringify({
+            label: pendingAuthorization.label,
+            purpose: "add_card",
+            reference: returnReference,
+          }),
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || "Unable to save card.");
+        }
+
+        window.sessionStorage.removeItem(cardAuthorizationStorageKey);
+        window.history.replaceState(null, "", "/account");
+        setPayments((current) => [result.paymentMethod as PaymentForm, ...current]);
+        setPaymentModalOpen(false);
+        setPaymentForm(emptyPayment);
+        setTab("wallet");
+        setMessage("Card authorized and saved.");
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Unable to save card.");
+      } finally {
+        setSavingPayment(false);
+      }
+    }
+
+    void verifyCardAuthorization();
   }, [supabase, user]);
 
   const updateProfileField = (key: keyof ProfileForm, value: string) => {
@@ -418,11 +528,6 @@ export function AccountPage() {
   const savePayment = async () => {
     if (!supabase || !user) return;
 
-    if (!paystackPublicKey) {
-      setMessage("Add NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY to .env.local first.");
-      return;
-    }
-
     if (!user.email) {
       setMessage("Your account email is required before saving a card.");
       return;
@@ -432,19 +537,8 @@ export function AccountPage() {
     setMessage("");
 
     try {
-      const transaction = await openPaystackTransaction({
-        amount: 5000,
-        channels: ["card"],
-        currency: "NGN",
-        email: user.email,
-        key: paystackPublicKey,
-        metadata: {
-          label: paymentForm.label || "Personal Card",
-          purpose: "add_card",
-        },
-      });
       const { data: sessionData } = await supabase.auth.getSession();
-      const response = await fetch("/api/paystack/verify", {
+      const response = await fetch("/api/paystack/initialize", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -455,21 +549,26 @@ export function AccountPage() {
         body: JSON.stringify({
           label: paymentForm.label || "Personal Card",
           purpose: "add_card",
-          reference: transaction.reference,
         }),
       });
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || "Unable to save card.");
+        throw new Error(result.error || "Unable to start card authorization.");
       }
 
-      setPayments((current) => [result.paymentMethod as PaymentForm, ...current]);
-      setPaymentModalOpen(false);
-      setPaymentForm(emptyPayment);
-      setMessage("Card authorized and saved.");
+      window.sessionStorage.setItem(
+        cardAuthorizationStorageKey,
+        JSON.stringify({
+          createdAt: Date.now(),
+          label: paymentForm.label || "Personal Card",
+          reference: result.reference,
+        } satisfies PendingCardAuthorization)
+      );
+
+      window.location.assign(result.authorizationUrl);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to save card.");
+      setMessage(error instanceof Error ? error.message : "Unable to start card authorization.");
     } finally {
       setSavingPayment(false);
     }
@@ -926,8 +1025,8 @@ export function AccountPage() {
               <input id="paymentLabel" placeholder="e.g. Personal Visa" value={paymentForm.label} onChange={(event) => updatePaymentField("label", event.target.value)} />
             </div>
             <div className={styles.paystackNotice}>
-              <strong>Paystack Test Authorization</strong>
-              <span>Card details open in Paystack. This wallet saves only the verified card brand and last four digits.</span>
+              <strong>Secure Paystack Authorization</strong>
+              <span>Card details open on Paystack&apos;s secure checkout. This wallet saves only the verified card brand and last four digits.</span>
             </div>
             {message && <p className={styles.message}>{message}</p>}
             <div className={styles.actions} style={{ marginTop: "24px" }}>
