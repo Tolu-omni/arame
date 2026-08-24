@@ -52,6 +52,26 @@ export function getSupabaseBrowserClient() {
   return browserClient;
 }
 
+export function getSiteUrl() {
+  const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL;
+  let url = configuredUrl || (typeof window !== "undefined" ? window.location.origin : "");
+
+  if (!url) {
+    return "";
+  }
+
+  url = url.startsWith("http") ? url : `https://${url}`;
+
+  return url.replace(/\/+$/, "");
+}
+
+export function getAuthRedirectUrl(path = "/account") {
+  const siteUrl = getSiteUrl();
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
+  return `${siteUrl}${normalizedPath}`;
+}
+
 function hasAuthRedirectParams(params: URLSearchParams) {
   return Array.from(params.keys()).some((key) => AUTH_REDIRECT_PARAMS.has(key));
 }

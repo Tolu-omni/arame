@@ -10,6 +10,7 @@ import { Header } from "@/frontend/components/shared/Header";
 import { Footer } from "@/frontend/components/shared/Footer";
 import {
   clearSupabaseAuthRedirectFromUrl,
+  getAuthRedirectUrl,
   getSupabaseBrowserClient,
 } from "@/frontend/supabase/browser";
 import { openPaystackTransaction } from "@/frontend/payments/paystack";
@@ -327,7 +328,7 @@ export function AccountPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/account`,
+        redirectTo: getAuthRedirectUrl("/account"),
       },
     });
 
