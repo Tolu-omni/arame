@@ -419,6 +419,21 @@
   accent-color: #97452f;
 }
 
+.paymentActionGrid {
+  display: grid;
+  gap: 12px;
+}
+
+.transferBtn {
+  background: #241c18;
+  border-color: #241c18;
+}
+
+.transferBtn:hover {
+  background: #6f4b3d;
+  border-color: #6f4b3d;
+}
+
 /* OTP Screen styling */
 .otpSection {
   text-align: center;

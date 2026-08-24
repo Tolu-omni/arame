@@ -39,6 +39,8 @@ export type PaystackInitializationData = {
   reference: string;
 };
 
+export type PaystackCheckoutChannel = "card" | "bank_transfer";
+
 type PaystackResponse<T> = {
   status: boolean;
   message: string;
@@ -132,7 +134,7 @@ export async function initializePaystackTransaction({
 }: {
   amount: number;
   callbackUrl: string;
-  channels?: string[];
+  channels?: PaystackCheckoutChannel[];
   email: string;
   metadata?: Record<string, unknown>;
   reference: string;

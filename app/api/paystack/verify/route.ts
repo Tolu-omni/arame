@@ -42,6 +42,18 @@ function getCardType(brand?: string, cardType?: string) {
   return value ? value.charAt(0).toUpperCase() + value.slice(1).toLowerCase() : "Card";
 }
 
+function getPaymentMethodType(channel?: string, brand?: string, cardType?: string) {
+  if (channel === "bank_transfer" || channel === "transfer") {
+    return "Bank transfer";
+  }
+
+  if (channel === "bank") {
+    return "Bank";
+  }
+
+  return getCardType(brand, cardType);
+}
+
 async function getAuthenticatedUser(request: Request, requireUser = false) {
   const accessToken = getBearerToken(request);
   const supabase = getSupabaseServerClient(accessToken);
@@ -228,7 +240,11 @@ export async function POST(request: Request) {
       trackingCode: data.tracking_code,
       payment: {
         last4: authorization?.last4 || "",
-        methodType: getCardType(authorization?.brand, authorization?.card_type),
+        methodType: getPaymentMethodType(
+          paystackTransaction.channel,
+          authorization?.brand,
+          authorization?.card_type
+        ),
         reference: paystackTransaction.reference,
       },
       total: fromKobo(paystackTransaction.amount),

@@ -2,6 +2,7 @@ import {
   generatePaystackReference,
   initializePaystackTransaction,
   isPaystackTestMode,
+  type PaystackCheckoutChannel,
 } from "@/backend/paystack/client";
 import {
   buildVerifiedOrderItems,
@@ -18,12 +19,21 @@ export const runtime = "nodejs";
 type InitializePurpose = "checkout" | "add_card";
 
 type InitializeBody = {
+  checkoutChannel?: PaystackCheckoutChannel;
   items?: CheckoutItemInput[];
   label?: string;
   purpose?: InitializePurpose;
   saveCard?: boolean;
   shipping?: ShippingInput;
 };
+
+function getCheckoutChannel(value?: string): PaystackCheckoutChannel {
+  return value === "bank_transfer" ? "bank_transfer" : "card";
+}
+
+function getCheckoutPaymentLabel(channel: PaystackCheckoutChannel) {
+  return channel === "bank_transfer" ? "Bank transfer" : "Paystack card";
+}
 
 async function getAuthenticatedContext(request: Request, requireUser = false) {
   const accessToken = getBearerToken(request);
@@ -94,6 +104,7 @@ export async function POST(request: Request) {
     }
 
     const { orderItems, total } = await buildVerifiedOrderItems(body.items ?? []);
+    const checkoutChannel = getCheckoutChannel(body.checkoutChannel);
     const { user } = await getAuthenticatedContext(request);
     const orderSupabase = getSupabaseServiceRoleClient();
 
@@ -104,18 +115,29 @@ export async function POST(request: Request) {
       );
     }
 
+    if (checkoutChannel === "bank_transfer" && total < 100) {
+      return Response.json(
+        { error: "Pay with Transfer is available for orders of NGN 100 or more." },
+        { status: 400 }
+      );
+    }
+
     const reference = generatePaystackReference("ARAME");
-    const callbackUrl = getSiteUrl("/checkout?payment=paystack", request);
+    const callbackUrl = getSiteUrl(
+      `/checkout?payment=${checkoutChannel === "bank_transfer" ? "paystack-transfer" : "paystack"}`,
+      request
+    );
     const transaction = await initializePaystackTransaction({
       amount: total,
       callbackUrl,
-      channels: ["card"],
+      channels: [checkoutChannel],
       email,
       metadata: {
         cancel_action: getSiteUrl("/checkout", request),
         cart_items: orderItems.length,
+        checkout_channel: checkoutChannel,
         purpose,
-        save_card: Boolean(body.saveCard),
+        save_card: checkoutChannel === "card" && Boolean(body.saveCard),
       },
       reference,
     });
@@ -123,6 +145,7 @@ export async function POST(request: Request) {
       .from("orders")
       .insert({
         items: orderItems,
+        payment_channel: checkoutChannel,
         payment_provider: "paystack",
         payment_reference: reference,
         shipping_address: body.shipping || null,
@@ -143,6 +166,7 @@ export async function POST(request: Request) {
       orderId: order.id,
       reference: transaction.reference,
       testMode: isPaystackTestMode(),
+      paymentLabel: getCheckoutPaymentLabel(checkoutChannel),
       trackingCode: order.tracking_code,
       total,
     });

@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   CreditCard,
+  Landmark,
 } from "lucide-react";
 import styles from "./checkout-page.module.css";
 
@@ -41,6 +42,8 @@ type PaymentMethod = {
   last4: string;
   method_type: string;
 };
+
+type CheckoutPaymentChannel = "card" | "bank_transfer";
 
 type PendingCheckoutPayment = {
   createdAt: number;
@@ -100,6 +103,10 @@ function readPendingPayment(storageKey: string) {
   } catch {
     return null;
   }
+}
+
+function getCheckoutPaymentLabel(channel: CheckoutPaymentChannel) {
+  return channel === "bank_transfer" ? "Bank transfer" : "Paystack card";
 }
 
 export function CheckoutPage() {
@@ -301,7 +308,7 @@ export function CheckoutPage() {
           orderId: result.orderId,
           paymentLabel: pendingPayment?.paymentLabel || (result.payment?.last4
             ? `${result.payment.methodType || "Card"} ending in ${result.payment.last4}`
-            : "Paystack card"),
+            : result.payment?.methodType || "Paystack payment"),
           paymentReference: result.payment?.reference || returnReference,
           trackingCode: result.trackingCode,
           total: Number(result.total || pendingPayment?.total || 0),
@@ -318,9 +325,7 @@ export function CheckoutPage() {
     void verifyReturnedPayment();
   }, [completeOrder, getSessionAccessToken]);
 
-  const handlePaymentSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const startPaystackCheckout = async (checkoutChannel: CheckoutPaymentChannel) => {
     if (!shipping.email) {
       setErrorMessage("Enter an email address before payment.");
       return;
@@ -338,9 +343,10 @@ export function CheckoutPage() {
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({
+          checkoutChannel,
           items,
           purpose: "checkout",
-          saveCard: savePaymentMethod,
+          saveCard: checkoutChannel === "card" && savePaymentMethod,
           shipping,
         }),
       });
@@ -355,8 +361,9 @@ export function CheckoutPage() {
         JSON.stringify({
           createdAt: Date.now(),
           items,
+          paymentLabel: result.paymentLabel || getCheckoutPaymentLabel(checkoutChannel),
           reference: result.reference,
-          saveCard: savePaymentMethod,
+          saveCard: checkoutChannel === "card" && savePaymentMethod,
           shipping,
           total: Number(result.total || cartSubtotal),
         } satisfies PendingCheckoutPayment)
@@ -619,11 +626,17 @@ export function CheckoutPage() {
                     </div>
                   )}
 
-                  <form onSubmit={handlePaymentSubmit} className={styles.paymentForm}>
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void startPaystackCheckout("card");
+                    }}
+                    className={styles.paymentForm}
+                  >
 
                     <div className={styles.secureNotice}>
                       <ShieldCheck size={18} className={styles.secureIcon} />
-                      <span>Card details open on Paystack&apos;s secure checkout. Arame stores only verified payment references and safe card metadata.</span>
+                      <span>Payments open on Paystack&apos;s secure checkout. Arame stores only verified payment references and safe card metadata.</span>
                     </div>
 
                     {user && (
@@ -637,9 +650,20 @@ export function CheckoutPage() {
                       </label>
                     )}
 
-                    <button type="submit" className={styles.submitBtn}>
-                      Pay with New Card {formatPrice(subtotal)}
-                    </button>
+                    <div className={styles.paymentActionGrid}>
+                      <button type="submit" className={styles.submitBtn}>
+                        <CreditCard size={18} />
+                        Pay with Card {formatPrice(subtotal)}
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.submitBtn} ${styles.transferBtn}`}
+                        onClick={() => void startPaystackCheckout("bank_transfer")}
+                      >
+                        <Landmark size={18} />
+                        Pay by Transfer {formatPrice(subtotal)}
+                      </button>
+                    </div>
                   </form>
                 </div>
               )}

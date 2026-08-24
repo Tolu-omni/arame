@@ -843,7 +843,6 @@ export function AccountPage() {
               {showOrders && (
                 <section>
                   <div className={styles.block}>
-                    <h2>My Orders</h2>
                     <p>View your order history or check the status of a recent order.</p>
                   </div>
 
