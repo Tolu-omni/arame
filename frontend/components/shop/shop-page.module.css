@@ -192,36 +192,45 @@
 .topControls {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 14px;
   flex-wrap: wrap;
 }
 
 .currencySelect {
-  display: flex;
+  min-height: 46px;
+  display: grid;
   align-items: center;
-  gap: 10px;
+  gap: 2px;
+  border: 1px solid #c8bfb6;
+  background: #fbf8f4;
+  padding: 6px 12px;
   color: #2e231d;
-  font-size: 16px;
 }
 
 .currencySelect span {
   color: #6d5d54;
-  font-size: 13px;
+  font-size: 11px;
+  line-height: 1;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
 .currencySelect select {
-  height: 38px;
-  border: 1px solid #c8bfb6;
-  background: #f7f3ef;
+  min-width: 140px;
+  height: 24px;
+  border: 0;
+  background: transparent;
   color: #241c18;
-  padding: 0 28px 0 10px;
+  padding: 0 20px 0 0;
   outline: none;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
 }
 
-.currencySelect select:focus {
+.currencySelect:focus-within {
   border-color: #97452f;
+  box-shadow: 0 0 0 2px rgba(151, 69, 47, 0.12);
 }
 
 .sortBox > button {

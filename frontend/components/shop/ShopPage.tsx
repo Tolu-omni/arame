@@ -144,16 +144,11 @@ export function ShopPage({ products = [] }: { products?: Product[] }) {
       items = items.filter((product) => product.category === selectedCategory);
     }
 
-    const productType = selectedOptions["Product type"] ?? [];
     const concentration = selectedOptions["Concentration"] ?? [];
     const scent = selectedOptions["Scent"] ?? [];
     const profile = selectedOptions["Scent Profile"] ?? [];
     const size = selectedOptions["Size"] ?? [];
     const price = priceValues["Price"];
-
-    if (selectedCategory === "All Products" && productType.length > 0) {
-      items = items.filter((product) => productType.some((x) => product.categoryTags.includes(x)));
-    }
 
     if (concentration.length > 0) {
       items = items.filter((product) => concentration.some((x) => product.concentrationTags.includes(x)));
@@ -227,6 +222,11 @@ export function ShopPage({ products = [] }: { products?: Product[] }) {
     setSelectedOptions(nextFilterState.selected);
     setPriceValues(nextFilterState.prices);
     setSelectedProduct(null);
+    setSortOpen(false);
+
+    if (searchTerm.trim()) {
+      router.replace("/shop", { scroll: false });
+    }
   };
 
   const selectProduct = (product: Product) => {
@@ -401,8 +401,9 @@ export function ShopPage({ products = [] }: { products?: Product[] }) {
 
                   <div className={styles.topControls}>
                     <label className={styles.currencySelect}>
-                      <span>Currency</span>
+                      <span>Display currency</span>
                       <select
+                        aria-label="Display currency"
                         value={currency}
                         onChange={(event) => setCurrency(event.target.value as StoreCurrency)}
                       >

@@ -11,10 +11,10 @@ type CurrencyContextValue = {
 };
 
 export const currencyOptions: { code: StoreCurrency; label: string }[] = [
-  { code: "NGN", label: "NGN" },
-  { code: "USD", label: "USD" },
-  { code: "GBP", label: "GBP" },
-  { code: "EUR", label: "EUR" },
+  { code: "NGN", label: "NGN - Naira" },
+  { code: "USD", label: "USD - Dollar" },
+  { code: "GBP", label: "GBP - Pound" },
+  { code: "EUR", label: "EUR - Euro" },
 ];
 
 const currencyRates: Record<StoreCurrency, number> = {
