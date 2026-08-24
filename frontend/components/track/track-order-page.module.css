@@ -28,6 +28,7 @@
 .timelinePanel,
 .receiptPanel,
 .itemsPanel,
+.notificationsPanel,
 .centerPanel {
   background: #ffffff;
   border: 1px solid #e1dcd5;
@@ -190,6 +191,16 @@
   margin: 0;
 }
 
+.panelTitleWithIcon {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.panelTitleWithIcon svg {
+  color: #97452f;
+}
+
 .panelHeader span {
   color: #8b7c72;
   font-size: 13px;
@@ -299,6 +310,57 @@
   max-width: 220px;
   overflow-wrap: anywhere;
   text-align: right;
+}
+
+.deliveryLine {
+  display: block;
+}
+
+.notificationsPanel {
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.notificationList {
+  display: flex;
+  flex-direction: column;
+}
+
+.notificationItem {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  gap: 14px;
+  padding: 18px 24px;
+  border-bottom: 1px solid #eee8e2;
+}
+
+.notificationItem:last-child {
+  border-bottom: 0;
+}
+
+.notificationDot {
+  width: 10px;
+  height: 10px;
+  margin-top: 7px;
+  border-radius: 50%;
+  background: #97452f;
+}
+
+.notificationItem strong {
+  color: #2d201b;
+  font-size: 15px;
+}
+
+.notificationItem p {
+  color: #605149;
+  font-size: 14px;
+  line-height: 1.45;
+  margin: 4px 0 5px;
+}
+
+.notificationItem span {
+  color: #8b7c72;
+  font-size: 12px;
 }
 
 .itemsPanel {

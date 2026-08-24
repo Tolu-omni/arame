@@ -585,6 +585,128 @@ $$;
 revoke all on function public.get_order_tracking(uuid, text) from public;
 grant execute on function public.get_order_tracking(uuid, text) to anon, authenticated;
 
+create table if not exists public.order_notifications (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references public.orders(id) on delete cascade,
+  user_id uuid references auth.users(id) on delete cascade,
+  tracking_code text,
+  status text,
+  title text not null,
+  message text not null,
+  read_at timestamptz,
+  created_at timestamptz default now()
+);
+
+alter table public.order_notifications enable row level security;
+
+drop policy if exists "users can view own order notifications" on public.order_notifications;
+create policy "users can view own order notifications"
+  on public.order_notifications for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "users can update own order notifications" on public.order_notifications;
+create policy "users can update own order notifications"
+  on public.order_notifications for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "admins can view all order notifications" on public.order_notifications;
+create policy "admins can view all order notifications"
+  on public.order_notifications for select
+  using (lower(coalesce(auth.jwt() ->> 'email', '')) in ('toluomoniyi9@gmail.com', 'toluomoniyi@gmail.com', 'tolu@arame.com'));
+
+create or replace function public.create_order_status_notification()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  next_title text;
+  next_message text;
+begin
+  if tg_op = 'UPDATE' and new.status is not distinct from old.status then
+    return new;
+  end if;
+
+  next_title := case new.status
+    when 'paid' then 'Payment confirmed'
+    when 'processing' then 'Order is being prepared'
+    when 'packed' then 'Order packed'
+    when 'shipped' then 'Order is out for delivery'
+    when 'delivered' then 'Order delivered'
+    when 'fulfilled' then 'Order delivered'
+    when 'cancelled' then 'Order cancelled'
+    else 'Order update'
+  end;
+
+  next_message := case new.status
+    when 'paid' then 'Your Arame order has been received and payment is confirmed.'
+    when 'processing' then 'Your Arame order is now being prepared.'
+    when 'packed' then 'Your Arame order has been packed.'
+    when 'shipped' then 'Your Arame order is marked as out for delivery.'
+    when 'delivered' then 'Your Arame order is marked as delivered.'
+    when 'fulfilled' then 'Your Arame order is marked as delivered.'
+    when 'cancelled' then 'Your Arame order has been cancelled.'
+    else 'Your Arame order status was updated.'
+  end;
+
+  insert into public.order_notifications (
+    order_id,
+    user_id,
+    tracking_code,
+    status,
+    title,
+    message
+  )
+  values (
+    new.id,
+    new.user_id,
+    new.tracking_code,
+    new.status,
+    next_title,
+    next_message
+  );
+
+  return new;
+end;
+$$;
+
+drop trigger if exists create_order_status_notification on public.orders;
+create trigger create_order_status_notification
+  after insert or update of status on public.orders
+  for each row execute function public.create_order_status_notification();
+
+create or replace function public.get_order_tracking_notifications(p_order_id uuid, p_tracking_code text)
+returns table (
+  id uuid,
+  title text,
+  message text,
+  status text,
+  created_at timestamptz,
+  read_at timestamptz
+)
+language sql
+security definer
+set search_path = public
+as $$
+  select
+    order_notifications.id,
+    order_notifications.title,
+    order_notifications.message,
+    order_notifications.status,
+    order_notifications.created_at,
+    order_notifications.read_at
+  from public.order_notifications
+  where order_notifications.order_id = p_order_id
+    and order_notifications.tracking_code = upper(trim(p_tracking_code))
+  order by order_notifications.created_at desc
+  limit 12;
+$$;
+
+revoke all on function public.get_order_tracking_notifications(uuid, text) from public;
+grant execute on function public.get_order_tracking_notifications(uuid, text) to anon, authenticated;
+
 -- Admin dashboard sign-in events
 create table if not exists public.sign_in_events (
   id uuid primary key default gen_random_uuid(),

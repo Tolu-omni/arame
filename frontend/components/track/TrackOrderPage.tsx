@@ -7,8 +7,10 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
+  Bell,
   CheckCircle2,
   Clock3,
+  Download,
   PackageCheck,
   ReceiptText,
   RefreshCw,
@@ -39,6 +41,7 @@ type ShippingAddress = {
   last_name?: string;
   email?: string;
   address?: string;
+  address_line_2?: string;
   city?: string;
   state?: string;
   postal_code?: string;
@@ -58,6 +61,28 @@ type TrackingOrder = {
   status_updated_at: string | null;
   total: number | string;
   tracking_code: string | null;
+  user_id?: string | null;
+};
+
+type AddressRow = {
+  address_line_1?: string | null;
+  address_line_2?: string | null;
+  city?: string | null;
+  email?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  phone?: string | null;
+  postal_code?: string | null;
+  state?: string | null;
+};
+
+type OrderNotification = {
+  created_at: string | null;
+  id: string;
+  message: string;
+  read_at: string | null;
+  status: string | null;
+  title: string;
 };
 
 const orderSelect = [
@@ -73,7 +98,10 @@ const orderSelect = [
   "status_updated_at",
   "total",
   "tracking_code",
+  "user_id",
 ].join(",");
+
+const notificationSelect = "id,title,message,status,created_at,read_at";
 
 const stepIcons = [ReceiptText, Clock3, PackageCheck, Truck, CheckCircle2];
 
@@ -95,12 +123,39 @@ function formatDateTime(value?: string | null) {
   });
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function getShippingAddress(value: unknown): ShippingAddress | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
 
   return value as ShippingAddress;
+}
+
+function getShippingAddressFromSavedAddress(address?: AddressRow | null): ShippingAddress | null {
+  if (!address) {
+    return null;
+  }
+
+  return {
+    address: address.address_line_1 || "",
+    address_line_2: address.address_line_2 || "",
+    city: address.city || "",
+    email: address.email || "",
+    first_name: address.first_name || "",
+    last_name: address.last_name || "",
+    phone: address.phone || "",
+    postal_code: address.postal_code || "",
+    state: address.state || "",
+  };
 }
 
 function getTrackingOrder(value: unknown): TrackingOrder | null {
@@ -118,6 +173,21 @@ function getTrackingOrder(value: unknown): TrackingOrder | null {
 
 function getCustomerName(shipping: ShippingAddress | null) {
   return [shipping?.first_name, shipping?.last_name].filter(Boolean).join(" ") || "Customer";
+}
+
+function getDeliveryLines(shipping: ShippingAddress | null) {
+  if (!shipping) {
+    return [];
+  }
+
+  return [
+    getCustomerName(shipping),
+    shipping.address,
+    shipping.address_line_2,
+    [shipping.city, shipping.state, shipping.postal_code].filter(Boolean).join(", "),
+    shipping.phone ? `Phone: ${shipping.phone}` : "",
+    shipping.email ? `Email: ${shipping.email}` : "",
+  ].filter((line): line is string => Boolean(line));
 }
 
 function getErrorMessage(error: unknown) {
@@ -142,10 +212,108 @@ export function TrackOrderPage({ orderId }: { orderId: string }) {
   const searchParams = useSearchParams();
   const trackingCode = searchParams.get("code")?.trim() || "";
   const [order, setOrder] = useState<TrackingOrder | null>(null);
+  const [notifications, setNotifications] = useState<OrderNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [requiresSignIn, setRequiresSignIn] = useState(false);
   const [error, setError] = useState("");
+
+  const loadDefaultShippingAddress = useCallback(async () => {
+    if (!supabase) {
+      return null;
+    }
+
+    const { data } = await supabase
+      .from("addresses")
+      .select("first_name,last_name,address_line_1,address_line_2,city,state,postal_code,phone")
+      .eq("is_default", true)
+      .maybeSingle();
+
+    return getShippingAddressFromSavedAddress(data);
+  }, [supabase]);
+
+  const withShippingFallback = useCallback(
+    async (nextOrder: TrackingOrder | null) => {
+      if (!supabase || !nextOrder || nextOrder.shipping_address?.address) {
+        return nextOrder;
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const currentUserId = sessionData.session?.user.id;
+
+      if (!currentUserId) {
+        return nextOrder;
+      }
+
+      const { data: ownedOrder } = await supabase
+        .from("orders")
+        .select("id,user_id,shipping_address")
+        .eq("id", orderId)
+        .maybeSingle();
+
+      const orderOwnerId =
+        ownedOrder && typeof ownedOrder === "object" && "user_id" in ownedOrder
+          ? String(ownedOrder.user_id || "")
+          : "";
+
+      if (orderOwnerId !== currentUserId) {
+        return nextOrder;
+      }
+
+      const ownedShipping =
+        ownedOrder && typeof ownedOrder === "object" && "shipping_address" in ownedOrder
+          ? getShippingAddress(ownedOrder.shipping_address)
+          : null;
+      const fallbackShipping = ownedShipping?.address ? ownedShipping : await loadDefaultShippingAddress();
+
+      return {
+        ...nextOrder,
+        shipping_address: fallbackShipping,
+      };
+    },
+    [loadDefaultShippingAddress, orderId, supabase]
+  );
+
+  const loadNotifications = useCallback(async () => {
+    if (!supabase) {
+      return;
+    }
+
+    try {
+      if (trackingCode) {
+        const { data, error: notificationError } = await supabase.rpc(
+          "get_order_tracking_notifications",
+          {
+            p_order_id: orderId,
+            p_tracking_code: trackingCode,
+          }
+        );
+
+        if (notificationError) {
+          throw notificationError;
+        }
+
+        setNotifications((data ?? []) as OrderNotification[]);
+        return;
+      }
+
+      const { data, error: notificationError } = await supabase
+        .from("order_notifications")
+        .select(notificationSelect)
+        .eq("order_id", orderId)
+        .order("created_at", { ascending: false })
+        .limit(12);
+
+      if (notificationError) {
+        throw notificationError;
+      }
+
+      setNotifications((data ?? []) as OrderNotification[]);
+    } catch (notificationError) {
+      console.warn("Order notifications unavailable:", notificationError);
+      setNotifications([]);
+    }
+  }, [orderId, supabase, trackingCode]);
 
   const loadOrder = useCallback(
     async (silent = false) => {
@@ -177,7 +345,8 @@ export function TrackOrderPage({ orderId }: { orderId: string }) {
             throw rpcError;
           }
 
-          setOrder(getTrackingOrder(data));
+          setOrder(await withShippingFallback(getTrackingOrder(data)));
+          void loadNotifications();
           return;
         }
 
@@ -199,7 +368,8 @@ export function TrackOrderPage({ orderId }: { orderId: string }) {
           throw orderError;
         }
 
-        setOrder(getTrackingOrder(data));
+        setOrder(await withShippingFallback(getTrackingOrder(data)));
+        void loadNotifications();
       } catch (loadError) {
         console.error("Order tracking load failed:", loadError);
         setOrder(null);
@@ -209,7 +379,7 @@ export function TrackOrderPage({ orderId }: { orderId: string }) {
         setRefreshing(false);
       }
     },
-    [orderId, supabase, trackingCode]
+    [loadNotifications, orderId, supabase, trackingCode, withShippingFallback]
   );
 
   useEffect(() => {
@@ -229,8 +399,94 @@ export function TrackOrderPage({ orderId }: { orderId: string }) {
   const progress = getOrderTrackingProgress(status);
   const shipping = order?.shipping_address ?? null;
   const customerName = getCustomerName(shipping);
+  const deliveryLines = getDeliveryLines(shipping);
+  const addressLines = shipping
+    ? [shipping.address, shipping.address_line_2, [shipping.city, shipping.state, shipping.postal_code].filter(Boolean).join(", ")].filter(Boolean)
+    : [];
   const shortOrderId = orderId.slice(0, 8).toUpperCase();
   const isCancelled = status === "cancelled";
+  const notificationItems =
+    notifications.length > 0
+      ? notifications
+      : [
+          {
+            created_at: order?.status_updated_at || order?.created_at || null,
+            id: "current-status",
+            message: `Your order is currently marked as ${statusLabel.toLowerCase()}.`,
+            read_at: null,
+            status,
+            title: statusLabel,
+          },
+        ];
+
+  const downloadReceipt = () => {
+    if (!order) {
+      return;
+    }
+
+    const itemRows = Array.isArray(order.items)
+      ? order.items
+          .map(
+            (item) => `
+              <tr>
+                <td>${escapeHtml(item.name)}</td>
+                <td>${escapeHtml(String(item.size || ""))}</td>
+                <td>${escapeHtml(String(item.quantity || 0))}</td>
+                <td>${escapeHtml(formatCurrency(Number(item.price) * Number(item.quantity)))}</td>
+              </tr>`
+          )
+          .join("")
+      : "";
+
+    const html = `<!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Arame Receipt ${escapeHtml(shortOrderId)}</title>
+          <style>
+            body { color: #241c18; font-family: Arial, sans-serif; margin: 40px; }
+            h1 { font-family: Georgia, serif; font-weight: 400; margin: 0 0 6px; }
+            .muted { color: #6f625b; }
+            .box { border: 1px solid #d8cfc7; margin-top: 24px; padding: 20px; }
+            .row { display: flex; justify-content: space-between; gap: 24px; margin: 10px 0; }
+            table { border-collapse: collapse; margin-top: 20px; width: 100%; }
+            th, td { border-bottom: 1px solid #e5ded7; padding: 12px; text-align: left; }
+            th { background: #f5f2ed; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+            .total { color: #97452f; font-size: 22px; font-weight: 700; }
+          </style>
+        </head>
+        <body>
+          <h1>Arame Receipt</h1>
+          <div class="muted">Order ${escapeHtml(order.id)}</div>
+          <div class="box">
+            <div class="row"><span>Status</span><strong>${escapeHtml(statusLabel)}</strong></div>
+            <div class="row"><span>Tracking Code</span><strong>${escapeHtml(order.tracking_code || "")}</strong></div>
+            <div class="row"><span>Reference</span><strong>${escapeHtml(order.payment_reference || "")}</strong></div>
+            <div class="row"><span>Date</span><strong>${escapeHtml(formatDateTime(order.created_at))}</strong></div>
+            <div class="row"><span>Total</span><strong class="total">${escapeHtml(formatCurrency(order.total))}</strong></div>
+          </div>
+          <div class="box">
+            <strong>Delivery Details</strong>
+            ${(deliveryLines.length > 0 ? deliveryLines : ["Address not saved"])
+              .map((line) => `<div>${escapeHtml(line)}</div>`)
+              .join("")}
+          </div>
+          <table>
+            <thead><tr><th>Item</th><th>Size</th><th>Qty</th><th>Amount</th></tr></thead>
+            <tbody>${itemRows}</tbody>
+          </table>
+        </body>
+      </html>`;
+
+    const url = window.URL.createObjectURL(new Blob([html], { type: "text/html" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `arame-receipt-${shortOrderId}.html`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  };
 
   return (
     <div className={styles.trackPage}>
@@ -277,6 +533,10 @@ export function TrackOrderPage({ orderId }: { orderId: string }) {
                 <span className={`${styles.statusBadge} ${styles[status]}`}>
                   {statusLabel}
                 </span>
+                <button className={styles.refreshButton} type="button" onClick={downloadReceipt}>
+                  <Download size={16} />
+                  Receipt
+                </button>
                 <button className={styles.refreshButton} type="button" onClick={() => void loadOrder(true)}>
                   <RefreshCw size={16} className={refreshing ? styles.spinning : ""} />
                   Refresh
@@ -354,13 +614,17 @@ export function TrackOrderPage({ orderId }: { orderId: string }) {
                     </div>
                   )}
                   <div>
-                    <span>Delivery</span>
+                    <span>Customer</span>
+                    <strong>{customerName}</strong>
+                  </div>
+                  <div>
+                    <span>Address</span>
                     <strong>
-                      {shipping?.address ? (
+                      {addressLines.length > 0 ? (
                         <>
-                          {shipping.address}
-                          <br />
-                          {[shipping.city, shipping.state].filter(Boolean).join(", ")}
+                          {addressLines.map((line) => (
+                            <span className={styles.deliveryLine} key={line}>{line}</span>
+                          ))}
                         </>
                       ) : (
                         "Address not saved"
@@ -375,6 +639,29 @@ export function TrackOrderPage({ orderId }: { orderId: string }) {
                   )}
                 </div>
               </aside>
+            </section>
+
+            <section className={styles.notificationsPanel}>
+              <div className={styles.panelHeader}>
+                <div className={styles.panelTitleWithIcon}>
+                  <Bell size={18} />
+                  <h2>Updates</h2>
+                </div>
+                <span>{notificationItems.length} notice(s)</span>
+              </div>
+
+              <div className={styles.notificationList}>
+                {notificationItems.map((notification) => (
+                  <div className={styles.notificationItem} key={notification.id}>
+                    <div className={styles.notificationDot} />
+                    <div>
+                      <strong>{notification.title}</strong>
+                      <p>{notification.message}</p>
+                      <span>{formatDateTime(notification.created_at)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </section>
 
             <section className={styles.itemsPanel}>

@@ -71,11 +71,14 @@ type OrderRow = {
   items?: { name?: string; quantity?: number | string }[] | null;
   payment_reference?: string | null;
   shipping_address?: {
+    address?: string;
+    address_line_2?: string;
     first_name?: string;
     last_name?: string;
     email?: string;
     city?: string;
     state?: string;
+    postal_code?: string;
     phone?: string;
   } | null;
   status_updated_at?: string | null;
@@ -197,7 +200,8 @@ function formatOrderCustomer(order: OrderRow) {
 
 function formatOrderLocation(order: OrderRow) {
   const shipping = order.shipping_address;
-  const location = [shipping?.city, shipping?.state].filter(Boolean).join(", ");
+  const cityLine = [shipping?.city, shipping?.state, shipping?.postal_code].filter(Boolean).join(", ");
+  const location = [shipping?.address, shipping?.address_line_2, cityLine].filter(Boolean).join(" - ");
 
   return location || shipping?.phone || "No delivery details";
 }
