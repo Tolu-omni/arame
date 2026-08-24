@@ -145,7 +145,7 @@ export async function initializePaystackTransaction({
       channels,
       currency: "NGN",
       email,
-      metadata: metadata ? JSON.stringify(metadata) : undefined,
+      metadata,
       reference,
     }),
   });
@@ -175,7 +175,7 @@ export async function chargePaystackAuthorization({
       channels: ["card"],
       currency: "NGN",
       email,
-      metadata: metadata ? JSON.stringify(metadata) : undefined,
+      metadata,
       reference,
     }),
   });

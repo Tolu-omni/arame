@@ -60,7 +60,7 @@ type TrackingOrder = {
   payment_reference: string | null;
   shipping_address: ShippingAddress | null;
   status: string | null;
-  status_updated_at: string | null;
+  status_updated_at?: string | null;
   total: number | string;
   tracking_code: string | null;
   user_id?: string | null;
@@ -97,7 +97,6 @@ const orderSelect = [
   "payment_reference",
   "shipping_address",
   "status",
-  "status_updated_at",
   "total",
   "tracking_code",
   "user_id",

@@ -503,7 +503,7 @@ export function AdminPage() {
 
       const { data, error } = await supabase
         .from("orders")
-        .select("id,user_id,status,total,created_at,status_updated_at,tracking_code,payment_reference,shipping_address,items")
+        .select("id,user_id,status,total,created_at,tracking_code,payment_reference,shipping_address,items")
         .order("created_at", { ascending: false })
         .limit(8);
 

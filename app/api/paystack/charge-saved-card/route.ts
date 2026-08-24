@@ -1,5 +1,5 @@
 import { chargePaystackAuthorization, fromKobo, generatePaystackReference } from "@/backend/paystack/client";
-import { getSupabaseServerClient } from "@/backend/supabase/server";
+import { getSupabaseServerClient, getSupabaseServiceRoleClient } from "@/backend/supabase/server";
 import { getSiteUrl } from "@/backend/lib/site";
 import {
   buildVerifiedOrderItems,
@@ -74,9 +74,17 @@ export async function POST(request: Request) {
 
     const { orderItems, total } = await buildVerifiedOrderItems(body.items ?? []);
     const email = savedCard.email || userData.user.email;
+    const orderSupabase = getSupabaseServiceRoleClient();
 
     if (!email) {
       return Response.json({ error: "Saved card email is missing." }, { status: 400 });
+    }
+
+    if (!orderSupabase) {
+      return Response.json(
+        { error: "Add SUPABASE_SERVICE_ROLE_KEY before charging saved cards." },
+        { status: 500 }
+      );
     }
 
     const charge = await chargePaystackAuthorization({
@@ -94,8 +102,28 @@ export async function POST(request: Request) {
     });
 
     if (charge.paused && charge.authorization_url) {
+      const { data: pendingOrder, error: pendingOrderError } = await orderSupabase
+        .from("orders")
+        .insert({
+          items: orderItems,
+          payment_channel: charge.channel || "card",
+          payment_provider: "paystack",
+          payment_reference: charge.reference,
+          shipping_address: body.shipping || null,
+          status: "pending",
+          total,
+          user_id: userData.user.id,
+        })
+        .select("id,tracking_code")
+        .single();
+
+      if (pendingOrderError) {
+        throw pendingOrderError;
+      }
+
       return Response.json({
         authorizationUrl: charge.authorization_url,
+        orderId: pendingOrder.id,
         payment: {
           last4: savedCard.last4 || "",
           methodType: savedCard.method_type || "Card",
@@ -103,6 +131,7 @@ export async function POST(request: Request) {
         },
         reference: charge.reference,
         requiresAction: true,
+        trackingCode: pendingOrder.tracking_code,
         total,
       });
     }
@@ -114,7 +143,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: order, error: orderError } = await supabase
+    const { data: order, error: orderError } = await orderSupabase
       .from("orders")
       .insert({
         items: orderItems,
@@ -124,7 +153,6 @@ export async function POST(request: Request) {
         payment_reference: charge.reference,
         shipping_address: body.shipping || null,
         status: "paid",
-        status_updated_at: new Date().toISOString(),
         total: fromKobo(charge.amount),
         user_id: userData.user.id,
       })

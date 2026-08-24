@@ -10,7 +10,7 @@ import {
   type ShippingInput,
 } from "@/backend/paystack/orders";
 import { getSiteUrl } from "@/backend/lib/site";
-import { getSupabaseServerClient } from "@/backend/supabase/server";
+import { getSupabaseServerClient, getSupabaseServiceRoleClient } from "@/backend/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -25,26 +25,30 @@ type InitializeBody = {
   shipping?: ShippingInput;
 };
 
-async function getUserEmail(request: Request) {
+async function getAuthenticatedContext(request: Request, requireUser = false) {
   const accessToken = getBearerToken(request);
-
-  if (!accessToken) {
-    return "";
-  }
-
   const supabase = getSupabaseServerClient(accessToken);
 
   if (!supabase) {
     throw new Error("Supabase is not configured.");
   }
 
+  if (!accessToken) {
+    return { supabase, user: null };
+  }
+
   const { data, error } = await supabase.auth.getUser();
 
   if (error) {
+    if (!requireUser) {
+      console.warn("Ignoring checkout auth lookup failure:", error.message);
+      return { supabase, user: null };
+    }
+
     throw error;
   }
 
-  return data.user?.email || "";
+  return { supabase, user: data.user };
 }
 
 export async function POST(request: Request) {
@@ -53,7 +57,8 @@ export async function POST(request: Request) {
     const purpose = body.purpose || "checkout";
 
     if (purpose === "add_card") {
-      const email = await getUserEmail(request);
+      const { user } = await getAuthenticatedContext(request, true);
+      const email = user?.email || "";
 
       if (!email) {
         return Response.json({ error: "Please sign in before saving a card." }, { status: 401 });
@@ -89,6 +94,16 @@ export async function POST(request: Request) {
     }
 
     const { orderItems, total } = await buildVerifiedOrderItems(body.items ?? []);
+    const { user } = await getAuthenticatedContext(request);
+    const orderSupabase = getSupabaseServiceRoleClient();
+
+    if (!orderSupabase) {
+      return Response.json(
+        { error: "Add SUPABASE_SERVICE_ROLE_KEY before accepting Paystack checkout orders." },
+        { status: 500 }
+      );
+    }
+
     const reference = generatePaystackReference("ARAME");
     const callbackUrl = getSiteUrl("/checkout?payment=paystack", request);
     const transaction = await initializePaystackTransaction({
@@ -104,12 +119,31 @@ export async function POST(request: Request) {
       },
       reference,
     });
+    const { data: order, error: orderError } = await orderSupabase
+      .from("orders")
+      .insert({
+        items: orderItems,
+        payment_provider: "paystack",
+        payment_reference: reference,
+        shipping_address: body.shipping || null,
+        status: "pending",
+        total,
+        user_id: user?.id || null,
+      })
+      .select("id,tracking_code")
+      .single();
+
+    if (orderError) {
+      throw orderError;
+    }
 
     return Response.json({
       accessCode: transaction.access_code,
       authorizationUrl: transaction.authorization_url,
+      orderId: order.id,
       reference: transaction.reference,
       testMode: isPaystackTestMode(),
+      trackingCode: order.tracking_code,
       total,
     });
   } catch (error) {

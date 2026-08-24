@@ -1,7 +1,7 @@
 import { isAdminEmail } from "@/backend/admin/access";
 import { sendOrderStatusEmail } from "@/backend/email/orders";
 import { getBearerToken } from "@/backend/paystack/orders";
-import { getSupabaseServerClient } from "@/backend/supabase/server";
+import { getSupabaseServerClient, getSupabaseServiceRoleClient } from "@/backend/supabase/server";
 import { normalizeOrderStatus, type OrderStatus } from "@/frontend/orders/tracking";
 
 export const dynamic = "force-dynamic";
@@ -51,7 +51,16 @@ export async function PATCH(
       return Response.json({ error: "Unsupported order status." }, { status: 400 });
     }
 
-    const { data: currentOrder, error: currentError } = await supabase
+    const adminSupabase = getSupabaseServiceRoleClient();
+
+    if (!adminSupabase) {
+      return Response.json(
+        { error: "Add SUPABASE_SERVICE_ROLE_KEY before updating order status." },
+        { status: 500 }
+      );
+    }
+
+    const { data: currentOrder, error: currentError } = await adminSupabase
       .from("orders")
       .select("status")
       .eq("id", orderId)
@@ -61,15 +70,13 @@ export async function PATCH(
       throw currentError;
     }
 
-    const statusUpdatedAt = new Date().toISOString();
-    const { data: order, error } = await supabase
+    const { data: order, error } = await adminSupabase
       .from("orders")
       .update({
         status,
-        status_updated_at: statusUpdatedAt,
       })
       .eq("id", orderId)
-      .select("id,items,payment_reference,shipping_address,status,status_updated_at,total,tracking_code")
+      .select("id,items,payment_reference,shipping_address,status,total,tracking_code")
       .single();
 
     if (error) {

@@ -256,14 +256,7 @@ export function CheckoutPage() {
         : checkoutPaymentStorageKey;
     const pending = readPendingPayment(storageKey);
 
-    if (!pending) {
-      setErrorMessage("Payment returned, but the checkout details expired. Please try again.");
-      setHandlingPaystackReturn(false);
-      setStep("payment");
-      return;
-    }
-
-    if (pending.reference !== returnReference) {
+    if (pending && pending.reference !== returnReference) {
       setErrorMessage("Payment reference does not match this checkout session.");
       setHandlingPaystackReturn(false);
       setStep("payment");
@@ -271,7 +264,9 @@ export function CheckoutPage() {
     }
 
     const pendingPayment = pending;
-    setShipping(pending.shipping);
+    if (pendingPayment) {
+      setShipping(pendingPayment.shipping);
+    }
 
     async function verifyReturnedPayment() {
       try {
@@ -283,11 +278,11 @@ export function CheckoutPage() {
             ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
           },
           body: JSON.stringify({
-            items: pendingPayment.items,
+            items: pendingPayment?.items ?? [],
             purpose: "checkout",
             reference: returnReference,
-            saveCard: pendingPayment.saveCard,
-            shipping: pendingPayment.shipping,
+            saveCard: pendingPayment?.saveCard ?? false,
+            shipping: pendingPayment?.shipping,
           }),
         });
         const result = await response.json();
@@ -296,17 +291,20 @@ export function CheckoutPage() {
           throw new Error(result.error || "Payment verification failed.");
         }
 
-        window.sessionStorage.removeItem(storageKey);
+        if (pendingPayment) {
+          window.sessionStorage.removeItem(storageKey);
+        }
         window.history.replaceState(null, "", "/checkout");
+        setShipping((result.shipping as ShippingForm | undefined) || pendingPayment?.shipping || emptyShipping);
 
         await completeOrder({
           orderId: result.orderId,
-          paymentLabel: pendingPayment.paymentLabel || (result.payment?.last4
+          paymentLabel: pendingPayment?.paymentLabel || (result.payment?.last4
             ? `${result.payment.methodType || "Card"} ending in ${result.payment.last4}`
             : "Paystack card"),
           paymentReference: result.payment?.reference || returnReference,
           trackingCode: result.trackingCode,
-          total: Number(result.total || pendingPayment.total),
+          total: Number(result.total || pendingPayment?.total || 0),
         });
       } catch (error) {
         console.error("Paystack return verification failed:", error);

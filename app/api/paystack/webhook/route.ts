@@ -1,4 +1,5 @@
 import { fromKobo, verifyPaystackWebhookSignature } from "@/backend/paystack/client";
+import { sendOrderReceiptEmail } from "@/backend/email/orders";
 import { getSupabaseServiceRoleClient } from "@/backend/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -51,22 +52,48 @@ export async function POST(request: Request) {
   }
 
   const paidAt = event.data.paid_at || new Date().toISOString();
+  const { data: currentOrder, error: currentError } = await supabase
+    .from("orders")
+    .select("id,status")
+    .eq("payment_reference", reference)
+    .maybeSingle();
+
+  if (currentError) {
+    console.error("Paystack webhook order lookup failed:", currentError);
+    return Response.json({ error: "Unable to find order." }, { status: 500 });
+  }
+
   const { data: order, error } = await supabase
     .from("orders")
     .update({
       paid_at: paidAt,
       payment_channel: event.data.channel || "card",
+      payment_provider: "paystack",
       status: "paid",
-      status_updated_at: paidAt,
       ...(typeof event.data.amount === "number" ? { total: fromKobo(event.data.amount) } : {}),
     })
     .eq("payment_reference", reference)
-    .select("id,tracking_code")
+    .select("id,items,payment_reference,shipping_address,total,tracking_code")
     .maybeSingle();
 
   if (error) {
     console.error("Paystack webhook order update failed:", error);
     return Response.json({ error: "Unable to update order." }, { status: 500 });
+  }
+
+  if (order && currentOrder?.status !== "paid") {
+    const emailResult = await sendOrderReceiptEmail({
+      items: order.items,
+      orderId: order.id,
+      paymentReference: order.payment_reference,
+      shipping: order.shipping_address,
+      total: order.total,
+      trackingCode: order.tracking_code,
+    });
+
+    if (!emailResult.sent) {
+      console.warn("Webhook receipt email was not sent:", emailResult.reason);
+    }
   }
 
   return Response.json({

@@ -1,4 +1,4 @@
-import { getSupabaseServerClient } from "@/backend/supabase/server";
+import { getSupabaseServerClient, getSupabaseServiceRoleClient } from "@/backend/supabase/server";
 import {
   fromKobo,
   isPaystackTestMode,
@@ -9,6 +9,7 @@ import {
   buildVerifiedOrderItems,
   getBearerToken,
   type CheckoutItemInput,
+  type OrderItem,
   type ShippingInput,
 } from "@/backend/paystack/orders";
 import { sendOrderReceiptEmail } from "@/backend/email/orders";
@@ -26,12 +27,22 @@ type VerifyBody = {
   shipping?: ShippingInput;
 };
 
+type ExistingOrder = {
+  id: string;
+  items: OrderItem[] | null;
+  shipping_address: ShippingInput | null;
+  status: string | null;
+  total: number | string;
+  tracking_code: string | null;
+  user_id: string | null;
+};
+
 function getCardType(brand?: string, cardType?: string) {
   const value = (brand || cardType || "Card").trim();
   return value ? value.charAt(0).toUpperCase() + value.slice(1).toLowerCase() : "Card";
 }
 
-async function getAuthenticatedUser(request: Request) {
+async function getAuthenticatedUser(request: Request, requireUser = false) {
   const accessToken = getBearerToken(request);
   const supabase = getSupabaseServerClient(accessToken);
 
@@ -46,6 +57,11 @@ async function getAuthenticatedUser(request: Request) {
   const { data, error } = await supabase.auth.getUser();
 
   if (error) {
+    if (!requireUser) {
+      console.warn("Ignoring payment verification auth lookup failure:", error.message);
+      return { supabase, user: null };
+    }
+
     throw error;
   }
 
@@ -71,7 +87,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { supabase, user } = await getAuthenticatedUser(request);
+    const { supabase, user } = await getAuthenticatedUser(request, purpose === "add_card");
     const authorization = paystackTransaction.authorization;
 
     if (purpose === "add_card") {
@@ -117,7 +133,30 @@ export async function POST(request: Request) {
       });
     }
 
-    const { orderItems, total } = await buildVerifiedOrderItems(body.items ?? []);
+    const orderSupabase = getSupabaseServiceRoleClient();
+
+    if (!orderSupabase) {
+      return Response.json(
+        { error: "Add SUPABASE_SERVICE_ROLE_KEY before verifying Paystack checkout orders." },
+        { status: 500 }
+      );
+    }
+
+    const { data: existingOrder, error: existingOrderError } = await orderSupabase
+      .from("orders")
+      .select("id,items,shipping_address,status,total,tracking_code,user_id")
+      .eq("payment_reference", paystackTransaction.reference)
+      .maybeSingle();
+
+    if (existingOrderError) {
+      throw existingOrderError;
+    }
+
+    const persistedOrder = existingOrder as ExistingOrder | null;
+    const verifiedItems = persistedOrder?.items?.length
+      ? { orderItems: persistedOrder.items, total: Number(persistedOrder.total || 0) }
+      : await buildVerifiedOrderItems(body.items ?? []);
+    const { orderItems, total } = verifiedItems;
     const expectedAmount = toKobo(total);
 
     if (paystackTransaction.amount !== expectedAmount) {
@@ -127,20 +166,23 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data, error } = await supabase
-      .from("orders")
-      .insert({
-        items: orderItems,
-        paid_at: paystackTransaction.paid_at || new Date().toISOString(),
-        payment_channel: paystackTransaction.channel || "card",
-        payment_provider: "paystack",
-        payment_reference: paystackTransaction.reference,
-        shipping_address: body.shipping || null,
-        status: "paid",
-        status_updated_at: new Date().toISOString(),
-        total: fromKobo(paystackTransaction.amount),
-        user_id: user?.id || null,
-      })
+    const orderPayload = {
+      items: orderItems,
+      paid_at: paystackTransaction.paid_at || new Date().toISOString(),
+      payment_channel: paystackTransaction.channel || "card",
+      payment_provider: "paystack",
+      payment_reference: paystackTransaction.reference,
+      shipping_address: body.shipping || persistedOrder?.shipping_address || null,
+      status: "paid",
+      total: fromKobo(paystackTransaction.amount),
+      user_id: persistedOrder?.user_id || user?.id || null,
+    };
+
+    const orderQuery = persistedOrder
+      ? orderSupabase.from("orders").update(orderPayload).eq("id", persistedOrder.id)
+      : orderSupabase.from("orders").insert(orderPayload);
+
+    const { data, error } = await orderQuery
       .select("id,items,payment_reference,shipping_address,total,tracking_code")
       .single();
 
@@ -164,22 +206,25 @@ export async function POST(request: Request) {
       });
     }
 
-    const emailResult = await sendOrderReceiptEmail({
-      fallbackEmail: paystackTransaction.customer?.email || user?.email,
-      items: data.items,
-      orderId: data.id,
-      paymentReference: data.payment_reference,
-      shipping: data.shipping_address,
-      total: data.total,
-      trackingCode: data.tracking_code,
-    });
+    if (persistedOrder?.status !== "paid") {
+      const emailResult = await sendOrderReceiptEmail({
+        fallbackEmail: paystackTransaction.customer?.email || user?.email,
+        items: data.items,
+        orderId: data.id,
+        paymentReference: data.payment_reference,
+        shipping: data.shipping_address,
+        total: data.total,
+        trackingCode: data.tracking_code,
+      });
 
-    if (!emailResult.sent) {
-      console.warn("Order receipt email was not sent:", emailResult.reason);
+      if (!emailResult.sent) {
+        console.warn("Order receipt email was not sent:", emailResult.reason);
+      }
     }
 
     return Response.json({
       orderId: data.id,
+      shipping: data.shipping_address,
       trackingCode: data.tracking_code,
       payment: {
         last4: authorization?.last4 || "",
