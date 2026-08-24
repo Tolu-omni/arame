@@ -5,8 +5,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import type { User } from "@supabase/supabase-js";
+import type { Session, User } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/frontend/supabase/browser";
+import { fetchAdminStatus } from "@/frontend/admin/access";
 import { useCart } from "@/frontend/context/CartContext";
 import styles from "@/frontend/components/home/home-page.module.css";
 
@@ -21,6 +22,7 @@ export function Header({ variant = "home" }: HeaderProps) {
   const { items } = useCart();
   const accountRef = useRef<HTMLDivElement>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [profile, setProfile] = useState({
     displayName: "",
@@ -33,36 +35,43 @@ export function Header({ variant = "home" }: HeaderProps) {
     let cancelled = false;
     const client = supabase;
 
-    async function loadProfile(nextUser: User | null) {
+    async function loadProfile(session: Session | null) {
+      const nextUser = session?.user ?? null;
+
       setUser(nextUser);
 
       if (!nextUser) {
         setProfile({ displayName: "", avatarUrl: "" });
+        setIsAdmin(false);
         return;
       }
 
-      const { data } = await client
-        .from("profiles")
-        .select("display_name, avatar_url")
-        .eq("id", nextUser.id)
-        .maybeSingle();
+      const [profileResult, nextIsAdmin] = await Promise.all([
+        client
+          .from("profiles")
+          .select("display_name, avatar_url")
+          .eq("id", nextUser.id)
+          .maybeSingle(),
+        fetchAdminStatus(session?.access_token),
+      ]);
 
       if (cancelled) return;
 
       setProfile({
-        displayName: data?.display_name || nextUser.email?.split("@")[0] || "Account",
-        avatarUrl: data?.avatar_url || "",
+        displayName: profileResult.data?.display_name || nextUser.email?.split("@")[0] || "Account",
+        avatarUrl: profileResult.data?.avatar_url || "",
       });
+      setIsAdmin(nextIsAdmin);
     }
 
     client.auth.getSession().then(({ data }) => {
       if (!cancelled) {
-        loadProfile(data.session?.user ?? null);
+        void loadProfile(data.session ?? null);
       }
     });
 
     const { data } = client.auth.onAuthStateChange((_event, session) => {
-      loadProfile(session?.user ?? null);
+      void loadProfile(session ?? null);
     });
 
     const handleProfileUpdate = (event: Event) => {
@@ -104,15 +113,6 @@ export function Header({ variant = "home" }: HeaderProps) {
   };
 
   const cartCount = items.reduce((total, item) => total + item.quantity, 0);
-
-  // Admin authorization check
-  const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || "toluomoniyi@gmail.com";
-  const isAdmin = user?.email && [
-    adminEmail.toLowerCase().trim(),
-    "toluomoniyi9@gmail.com",
-    "toluomoniyi@gmail.com",
-    "tolu@arame.com",
-  ].includes(user.email.toLowerCase().trim());
 
   return (
     <header className={`${styles.header} ${isShop ? styles.shopHeader : ""}`}>

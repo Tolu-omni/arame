@@ -49,7 +49,7 @@ PAYSTACK_SECRET_KEY=your_paystack_secret_key
 EMAIL_FROM=Arame <aramesupport@gmail.com>
 GMAIL_USER=aramesupport@gmail.com
 GMAIL_APP_PASSWORD=your_google_app_password_without_spaces
-ADMIN_EMAILS=toluomoniyi9@gmail.com,toluomoniyi@gmail.com,tolu@arame.com
+ADMIN_EMAILS=your-admin-login@example.com
 ```
 
 `RESEND_API_KEY` is optional and only needed if the store later uses a verified custom email domain with Resend.
@@ -59,6 +59,9 @@ Set the Paystack webhook URL to:
 ```bash
 https://arame-rose.vercel.app/api/paystack/webhook
 ```
+
+For admin access, add the same admin login email to Supabase by running `supabase/admin_access.sql`
+in the Supabase SQL Editor after replacing `your-admin-login@example.com`.
 
 After adding `SUPABASE_SERVICE_ROLE_KEY` locally, upload all current product images to Supabase Storage and update the live product rows:
 

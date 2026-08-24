@@ -3,9 +3,10 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { User } from "@supabase/supabase-js";
+import type { Session, User } from "@supabase/supabase-js";
 import Link from "next/link";
 import { getSupabaseBrowserClient } from "@/frontend/supabase/browser";
+import { fetchAdminStatus } from "@/frontend/admin/access";
 import { useToast } from "@/frontend/context/ToastContext";
 import { Header } from "@/frontend/components/shared/Header";
 import { Footer } from "@/frontend/components/shared/Footer";
@@ -286,6 +287,7 @@ export function AdminPage() {
   const { addToast } = useToast();
 
   const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
   const [rawProducts, setRawProducts] = useState<DbProductRow[]>([]);
@@ -324,22 +326,6 @@ export function AdminPage() {
   const [formScentTags, setFormScentTags] = useState("");
   const [formScentProfileTags, setFormScentProfileTags] = useState("");
 
-  // Check Admin Authorization
-  const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || "toluomoniyi@gmail.com";
-  const ADMIN_EMAILS = useMemo(() => {
-    return [
-      adminEmail.toLowerCase().trim(),
-      "toluomoniyi9@gmail.com",
-      "toluomoniyi@gmail.com",
-      "tolu@arame.com",
-    ];
-  }, [adminEmail]);
-
-  const isAdmin = useMemo(() => {
-    if (!user || !user.email) return false;
-    return ADMIN_EMAILS.includes(user.email.toLowerCase().trim());
-  }, [user, ADMIN_EMAILS]);
-
   // Load Auth Session
   useEffect(() => {
     if (!supabase) {
@@ -350,6 +336,18 @@ export function AdminPage() {
     let cancelled = false;
     const client = supabase;
 
+    async function applySession(session: Session | null) {
+      const nextUser = session?.user ?? null;
+      const nextIsAdmin = await fetchAdminStatus(session?.access_token);
+
+      if (!cancelled) {
+        setAuthError("");
+        setUser(nextUser);
+        setIsAdmin(nextIsAdmin);
+        setAuthLoading(false);
+      }
+    }
+
     async function loadSession() {
       try {
         const { data, error } = await client.auth.getSession();
@@ -358,19 +356,14 @@ export function AdminPage() {
           throw error;
         }
 
-        if (!cancelled) {
-          setAuthError("");
-          setUser(data.session?.user ?? null);
-        }
+        await applySession(data.session ?? null);
       } catch (error) {
         console.error("Error verifying admin access:", error);
 
         if (!cancelled) {
           setUser(null);
+          setIsAdmin(false);
           setAuthError(`Unable to verify admin access: ${getErrorMessage(error)}`);
-        }
-      } finally {
-        if (!cancelled) {
           setAuthLoading(false);
         }
       }
@@ -379,11 +372,7 @@ export function AdminPage() {
     void loadSession();
 
     const { data: authListener } = client.auth.onAuthStateChange((_event, session) => {
-      if (!cancelled) {
-        setAuthError("");
-        setUser(session?.user ?? null);
-        setAuthLoading(false);
-      }
+      void applySession(session ?? null);
     });
 
     return () => {

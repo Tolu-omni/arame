@@ -1,6 +1,32 @@
 -- Product catalog only.
 -- Run this in Supabase SQL Editor when you only need shop products/admin product CRUD.
 
+create table if not exists public.admin_users (
+  email text primary key,
+  is_active boolean not null default true,
+  created_at timestamptz default now()
+);
+
+alter table public.admin_users enable row level security;
+
+create or replace function public.is_admin_email()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.admin_users
+    where lower(email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+      and is_active = true
+  );
+$$;
+
+revoke all on function public.is_admin_email() from public;
+grant execute on function public.is_admin_email() to anon, authenticated;
+
 create table if not exists public.products (
   id uuid primary key default gen_random_uuid(),
   slug text unique not null,
@@ -31,23 +57,23 @@ create policy "active products are public"
 drop policy if exists "admins can view all products" on public.products;
 create policy "admins can view all products"
   on public.products for select
-  using (lower(coalesce(auth.jwt() ->> 'email', '')) in ('toluomoniyi9@gmail.com', 'toluomoniyi@gmail.com', 'tolu@arame.com'));
+  using (public.is_admin_email());
 
 drop policy if exists "admins can insert products" on public.products;
 create policy "admins can insert products"
   on public.products for insert
-  with check (lower(coalesce(auth.jwt() ->> 'email', '')) in ('toluomoniyi9@gmail.com', 'toluomoniyi@gmail.com', 'tolu@arame.com'));
+  with check (public.is_admin_email());
 
 drop policy if exists "admins can update products" on public.products;
 create policy "admins can update products"
   on public.products for update
-  using (lower(coalesce(auth.jwt() ->> 'email', '')) in ('toluomoniyi9@gmail.com', 'toluomoniyi@gmail.com', 'tolu@arame.com'))
-  with check (lower(coalesce(auth.jwt() ->> 'email', '')) in ('toluomoniyi9@gmail.com', 'toluomoniyi@gmail.com', 'tolu@arame.com'));
+  using (public.is_admin_email())
+  with check (public.is_admin_email());
 
 drop policy if exists "admins can delete products" on public.products;
 create policy "admins can delete products"
   on public.products for delete
-  using (lower(coalesce(auth.jwt() ->> 'email', '')) in ('toluomoniyi9@gmail.com', 'toluomoniyi@gmail.com', 'tolu@arame.com'));
+  using (public.is_admin_email());
 
 insert into storage.buckets (id, name, public)
 values ('product-images', 'product-images', true)
@@ -62,18 +88,18 @@ create policy "product images are public"
 drop policy if exists "admins can upload product images" on storage.objects;
 create policy "admins can upload product images"
   on storage.objects for insert
-  with check (bucket_id = 'product-images' and lower(coalesce(auth.jwt() ->> 'email', '')) in ('toluomoniyi9@gmail.com', 'toluomoniyi@gmail.com', 'tolu@arame.com'));
+  with check (bucket_id = 'product-images' and public.is_admin_email());
 
 drop policy if exists "admins can update product images" on storage.objects;
 create policy "admins can update product images"
   on storage.objects for update
-  using (bucket_id = 'product-images' and lower(coalesce(auth.jwt() ->> 'email', '')) in ('toluomoniyi9@gmail.com', 'toluomoniyi@gmail.com', 'tolu@arame.com'))
-  with check (bucket_id = 'product-images' and lower(coalesce(auth.jwt() ->> 'email', '')) in ('toluomoniyi9@gmail.com', 'toluomoniyi@gmail.com', 'tolu@arame.com'));
+  using (bucket_id = 'product-images' and public.is_admin_email())
+  with check (bucket_id = 'product-images' and public.is_admin_email());
 
 drop policy if exists "admins can delete product images" on storage.objects;
 create policy "admins can delete product images"
   on storage.objects for delete
-  using (bucket_id = 'product-images' and lower(coalesce(auth.jwt() ->> 'email', '')) in ('toluomoniyi9@gmail.com', 'toluomoniyi@gmail.com', 'tolu@arame.com'));
+  using (bucket_id = 'product-images' and public.is_admin_email());
 
 insert into public.products (
   slug,
