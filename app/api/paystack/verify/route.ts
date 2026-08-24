@@ -134,11 +134,13 @@ export async function POST(request: Request) {
         payment_channel: paystackTransaction.channel || "card",
         payment_provider: "paystack",
         payment_reference: paystackTransaction.reference,
+        shipping_address: body.shipping || null,
         status: "paid",
+        status_updated_at: new Date().toISOString(),
         total: fromKobo(paystackTransaction.amount),
         user_id: user?.id || null,
       })
-      .select("id")
+      .select("id,tracking_code")
       .single();
 
     if (error) {
@@ -163,6 +165,7 @@ export async function POST(request: Request) {
 
     return Response.json({
       orderId: data.id,
+      trackingCode: data.tracking_code,
       payment: {
         last4: authorization?.last4 || "",
         methodType: getCardType(authorization?.brand, authorization?.card_type),

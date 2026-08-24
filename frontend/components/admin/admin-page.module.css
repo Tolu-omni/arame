@@ -408,6 +408,12 @@
   font-weight: 400;
 }
 
+.tableSubtext {
+  margin: 4px 0 0;
+  color: #7d6b63;
+  font-size: 14px;
+}
+
 .tableSearch {
   position: relative;
   min-width: 280px;
@@ -511,6 +517,106 @@
 .actionsCell {
   display: flex;
   gap: 12px;
+}
+
+.orderTrackingCard {
+  margin-bottom: 40px;
+}
+
+.tableLoading,
+.emptyTableState {
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #7d6b63;
+}
+
+.orderRefCell,
+.orderCustomerCell {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.orderRefCell strong,
+.orderCustomerCell strong {
+  color: #241c18;
+  font-size: 14px;
+}
+
+.orderRefCell span,
+.orderCustomerCell span,
+.orderRefCell small {
+  color: #8b7c72;
+  font-size: 12px;
+}
+
+.orderRefCell small {
+  font-family: monospace;
+  letter-spacing: 0.04em;
+}
+
+.statusControl {
+  min-width: 178px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.statusControl select {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #c8bfb6;
+  background: #fdfcfb;
+  color: #241c18;
+  padding: 0 10px;
+  outline: none;
+}
+
+.statusControl select:focus {
+  border-color: #97452f;
+}
+
+.orderStatus_paid,
+.orderStatus_processing,
+.orderStatus_packed,
+.orderStatus_shipped,
+.orderStatus_pending {
+  background: #fff7e8;
+  color: #7f4d00;
+}
+
+.orderStatus_delivered,
+.orderStatus_fulfilled {
+  background: #eef7f2;
+  color: #1e7e4a;
+}
+
+.orderStatus_cancelled {
+  background: #fdf3f2;
+  color: #96352c;
+}
+
+.trackLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #97452f;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.trackLink:hover {
+  color: #2d201b;
+}
+
+.spinning {
+  animation: spin 0.8s linear infinite;
 }
 
 /* Buttons */

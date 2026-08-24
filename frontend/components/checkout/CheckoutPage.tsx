@@ -11,6 +11,7 @@ import { getSupabaseBrowserClient } from "@/frontend/supabase/browser";
 import { Header } from "@/frontend/components/shared/Header";
 import { Footer } from "@/frontend/components/shared/Footer";
 import { openPaystackTransaction } from "@/frontend/payments/paystack";
+import { getTrackingHref } from "@/frontend/orders/tracking";
 import {
   ShieldCheck,
   ArrowRight,
@@ -72,6 +73,7 @@ export function CheckoutPage() {
 
   // Post-payment state
   const [orderId, setOrderId] = useState("");
+  const [trackingCode, setTrackingCode] = useState("");
   const [receiptPaymentLabel, setReceiptPaymentLabel] = useState("Paystack card");
   const [receiptPaymentReference, setReceiptPaymentReference] = useState("");
   const [receiptTotal, setReceiptTotal] = useState(0);
@@ -147,6 +149,7 @@ export function CheckoutPage() {
     ? `\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 ${selectedPaymentMethod.last4}`
     : "PAYSTACK TEST CHECKOUT";
   const cardholderDisplay = `${shipping.first_name} ${shipping.last_name}`.trim() || "CUSTOMER";
+  const trackingHref = orderId ? getTrackingHref(orderId, trackingCode) : "/account?view=orders";
 
   const handleShippingSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -166,14 +169,17 @@ export function CheckoutPage() {
     orderId: nextOrderId,
     paymentLabel,
     paymentReference,
+    trackingCode: nextTrackingCode,
     total,
   }: {
     orderId: string;
     paymentLabel: string;
     paymentReference: string;
+    trackingCode?: string;
     total: number;
   }) => {
     setOrderId(nextOrderId);
+    setTrackingCode(nextTrackingCode || "");
     setReceiptPaymentLabel(paymentLabel);
     setReceiptPaymentReference(paymentReference);
     setReceiptTotal(total);
@@ -237,6 +243,7 @@ export function CheckoutPage() {
           ? `${result.payment.methodType || "Card"} ending in ${result.payment.last4}`
           : "Paystack card",
         paymentReference: result.payment?.reference || transaction.reference,
+        trackingCode: result.trackingCode,
         total: Number(result.total || cartSubtotal),
       });
     } catch (error) {
@@ -281,6 +288,7 @@ export function CheckoutPage() {
           ? `${result.payment.methodType || "Card"} ending in ${result.payment.last4}`
           : "Saved Paystack card",
         paymentReference: result.payment?.reference || "",
+        trackingCode: result.trackingCode,
         total: Number(result.total || cartSubtotal),
       });
     } catch (error) {
@@ -510,10 +518,12 @@ export function CheckoutPage() {
                 {errorMessage && <p className={styles.errorText}>{errorMessage}</p>}
               </div>
 
-              <div className={styles.receipt}>
+              <Link href={trackingHref} className={styles.receiptLink} aria-label="Track this receipt">
+                <div className={styles.receipt}>
                 <div className={styles.receiptHeader}>
                   <h3>TRANSACTION RECEIPT</h3>
                   <p>Order ID: <strong>{orderId}</strong></p>
+                  {trackingCode && <p>Track Code: <strong>{trackingCode}</strong></p>}
                   <p>Date: {new Date().toLocaleDateString()}</p>
                 </div>
 
@@ -548,14 +558,15 @@ export function CheckoutPage() {
                     <strong>₦{(subtotal).toFixed(2)}</strong>
                   </div>
                 </div>
-              </div>
+                </div>
+              </Link>
 
               <div className={styles.successActions}>
                 <Link href="/shop" className={`${styles.successBtn} ${styles.primary}`}>
                   Continue Shopping
                 </Link>
-                <Link href="/account?view=orders" className={styles.successBtn}>
-                  View Order Status
+                <Link href={trackingHref} className={styles.successBtn}>
+                  Track Receipt
                 </Link>
               </div>
             </div>

@@ -24,7 +24,16 @@ import {
   ReceiptText,
   ImageIcon,
   Upload,
+  RefreshCw,
+  ExternalLink,
 } from "lucide-react";
+import {
+  ADMIN_ORDER_STATUSES,
+  getOrderStatusLabel,
+  getTrackingHref,
+  normalizeOrderStatus,
+  type OrderStatus,
+} from "@/frontend/orders/tracking";
 import styles from "./admin-page.module.css";
 
 const PRODUCT_IMAGE_BUCKET = "product-images";
@@ -59,6 +68,18 @@ type ProfileRow = {
 
 type OrderRow = {
   id: string;
+  items?: { name?: string; quantity?: number | string }[] | null;
+  payment_reference?: string | null;
+  shipping_address?: {
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    city?: string;
+    state?: string;
+    phone?: string;
+  } | null;
+  status_updated_at?: string | null;
+  tracking_code?: string | null;
   user_id: string | null;
   status: string;
   total: number | string;
@@ -167,6 +188,20 @@ function formatActivityDate(value: string | null) {
   });
 }
 
+function formatOrderCustomer(order: OrderRow) {
+  const shipping = order.shipping_address;
+  const fullName = [shipping?.first_name, shipping?.last_name].filter(Boolean).join(" ");
+
+  return fullName || shipping?.email || (order.user_id ? `Customer ${order.user_id.slice(0, 8)}` : "Guest customer");
+}
+
+function formatOrderLocation(order: OrderRow) {
+  const shipping = order.shipping_address;
+  const location = [shipping?.city, shipping?.state].filter(Boolean).join(", ");
+
+  return location || shipping?.phone || "No delivery details";
+}
+
 function getLastSevenDays() {
   const today = new Date();
 
@@ -254,6 +289,10 @@ export function AdminPage() {
   const [analytics, setAnalytics] = useState<AdminAnalytics>(() => createEmptyAnalytics());
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
   const [analyticsError, setAnalyticsError] = useState("");
+  const [adminOrders, setAdminOrders] = useState<OrderRow[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [ordersError, setOrdersError] = useState("");
+  const [updatingOrderId, setUpdatingOrderId] = useState("");
 
   // Search & Filter
   const [searchTerm, setSearchTerm] = useState("");
@@ -446,12 +485,45 @@ export function AdminPage() {
     }
   }, [addToast, supabase, user?.email]);
 
+  const fetchOrders = useCallback(async () => {
+    if (!supabase) {
+      setAdminOrders([]);
+      setOrdersError("Supabase is not configured. Order tracking requires live Supabase data.");
+      setOrdersLoading(false);
+      return;
+    }
+
+    try {
+      setOrdersLoading(true);
+      setOrdersError("");
+
+      const { data, error } = await supabase
+        .from("orders")
+        .select("id,user_id,status,total,created_at,status_updated_at,tracking_code,payment_reference,shipping_address,items")
+        .order("created_at", { ascending: false })
+        .limit(8);
+
+      if (error) {
+        throw error;
+      }
+
+      setAdminOrders((data ?? []) as OrderRow[]);
+    } catch (error) {
+      console.error("Error loading admin orders:", error);
+      setAdminOrders([]);
+      setOrdersError(`Order tracking unavailable: ${getErrorMessage(error)}`);
+    } finally {
+      setOrdersLoading(false);
+    }
+  }, [supabase]);
+
   useEffect(() => {
     if (isAdmin) {
       void fetchAnalytics();
       void fetchProducts();
+      void fetchOrders();
     }
-  }, [fetchAnalytics, fetchProducts, isAdmin]);
+  }, [fetchAnalytics, fetchOrders, fetchProducts, isAdmin]);
 
   // Auto-generate slug from name
   useEffect(() => {
@@ -703,6 +775,51 @@ export function AdminPage() {
     }
   };
 
+  const handleOrderStatusChange = async (orderId: string, status: OrderStatus) => {
+    if (!supabase) {
+      addToast({
+        message: "Supabase is not configured. Order status was not updated.",
+        type: "error",
+      });
+      return;
+    }
+
+    try {
+      setUpdatingOrderId(orderId);
+
+      const { error } = await supabase
+        .from("orders")
+        .update({
+          status,
+          status_updated_at: new Date().toISOString(),
+        })
+        .eq("id", orderId);
+
+      if (error) {
+        throw error;
+      }
+
+      setAdminOrders((current) =>
+        current.map((order) =>
+          order.id === orderId
+            ? { ...order, status, status_updated_at: new Date().toISOString() }
+            : order
+        )
+      );
+      addToast({ message: "Order status updated.", type: "success" });
+      void fetchAnalytics();
+      void fetchOrders();
+    } catch (error) {
+      console.error("Error updating order status:", error);
+      addToast({
+        message: `Failed to update order: ${getErrorMessage(error)}`,
+        type: "error",
+      });
+    } finally {
+      setUpdatingOrderId("");
+    }
+  };
+
   // Calculations
   const stats = useMemo(() => {
     const total = rawProducts.length;
@@ -933,6 +1050,97 @@ export function AdminPage() {
               )}
             </div>
           </div>
+        </section>
+
+        <section className={`${styles.tableCard} ${styles.orderTrackingCard}`}>
+          <div className={styles.tableHeader}>
+            <div>
+              <h2>Order Tracking</h2>
+              <p className={styles.tableSubtext}>Recent receipts and delivery movement.</p>
+            </div>
+
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.btnSecondary}`}
+              onClick={() => void fetchOrders()}
+              disabled={ordersLoading}
+            >
+              <RefreshCw size={16} className={ordersLoading ? styles.spinning : ""} /> Refresh
+            </button>
+          </div>
+
+          {ordersError && (
+            <div className={styles.liveDataNotice}>
+              <AlertCircle size={16} />
+              <span>{ordersError}</span>
+            </div>
+          )}
+
+          {ordersLoading ? (
+            <div className={styles.tableLoading}>
+              <div className={styles.spinner} />
+            </div>
+          ) : adminOrders.length === 0 ? (
+            <div className={styles.emptyTableState}>No orders to track yet.</div>
+          ) : (
+            <div className={styles.tableWrap}>
+              <table className={styles.productTable}>
+                <thead>
+                  <tr>
+                    <th>Receipt</th>
+                    <th>Customer</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th>Track</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {adminOrders.map((order) => (
+                    <tr key={order.id}>
+                      <td>
+                        <div className={styles.orderRefCell}>
+                          <strong>{order.id.slice(0, 8).toUpperCase()}</strong>
+                          <span>{formatActivityDate(order.created_at)}</span>
+                          {order.tracking_code && <small>{order.tracking_code}</small>}
+                        </div>
+                      </td>
+                      <td>
+                        <div className={styles.orderCustomerCell}>
+                          <strong>{formatOrderCustomer(order)}</strong>
+                          <span>{formatOrderLocation(order)}</span>
+                        </div>
+                      </td>
+                      <td><strong>{formatPrice(Number(order.total || 0))}</strong></td>
+                      <td>
+                        <div className={styles.statusControl}>
+                          <span className={`${styles.badge} ${styles[`orderStatus_${normalizeOrderStatus(order.status)}`] || styles.orderStatus_pending}`}>
+                            {getOrderStatusLabel(order.status)}
+                          </span>
+                          <select
+                            aria-label={`Update order ${order.id} status`}
+                            value={normalizeOrderStatus(order.status) === "fulfilled" ? "delivered" : normalizeOrderStatus(order.status)}
+                            onChange={(event) => handleOrderStatusChange(order.id, event.target.value as OrderStatus)}
+                            disabled={updatingOrderId === order.id}
+                          >
+                            {ADMIN_ORDER_STATUSES.map((status) => (
+                              <option key={status} value={status}>
+                                {getOrderStatusLabel(status)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </td>
+                      <td>
+                        <Link className={styles.trackLink} href={getTrackingHref(order.id, order.tracking_code)}>
+                          <ExternalLink size={15} /> Open
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
 
         <div className={styles.sectionTitleRow}>

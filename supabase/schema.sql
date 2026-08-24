@@ -465,23 +465,63 @@ create policy "anyone can upload blog attachments"
 create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete set null,
-  status text not null default 'pending', -- pending, paid, fulfilled, cancelled
+  status text not null default 'pending', -- pending, paid, processing, packed, shipped, delivered, cancelled
+  tracking_code text default upper(substr(md5(random()::text || clock_timestamp()::text), 1, 10)),
   items jsonb not null,
   total numeric not null,
+  shipping_address jsonb,
   payment_provider text,
   payment_reference text,
   payment_channel text,
   paid_at timestamptz,
+  status_updated_at timestamptz default now(),
   created_at timestamptz default now()
 );
 
 alter table public.orders enable row level security;
 
 alter table public.orders
+  add column if not exists tracking_code text,
+  add column if not exists shipping_address jsonb,
   add column if not exists payment_provider text,
   add column if not exists payment_reference text,
   add column if not exists payment_channel text,
-  add column if not exists paid_at timestamptz;
+  add column if not exists paid_at timestamptz,
+  add column if not exists status_updated_at timestamptz default now();
+
+alter table public.orders
+  alter column tracking_code set default upper(substr(md5(random()::text || clock_timestamp()::text), 1, 10)),
+  alter column status_updated_at set default now();
+
+update public.orders
+set tracking_code = upper(substr(md5(id::text || coalesce(payment_reference, '') || created_at::text), 1, 10))
+where tracking_code is null;
+
+update public.orders
+set status_updated_at = coalesce(status_updated_at, paid_at, created_at, now())
+where status_updated_at is null;
+
+create unique index if not exists orders_tracking_code_key
+  on public.orders (tracking_code)
+  where tracking_code is not null;
+
+create or replace function public.set_order_status_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.status is distinct from old.status then
+    new.status_updated_at = now();
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists set_order_status_updated_at on public.orders;
+create trigger set_order_status_updated_at
+  before update on public.orders
+  for each row execute function public.set_order_status_updated_at();
 
 drop policy if exists "users can view their own orders" on public.orders;
 create policy "users can view their own orders"
@@ -493,10 +533,57 @@ create policy "admins can view all orders"
   on public.orders for select
   using (lower(coalesce(auth.jwt() ->> 'email', '')) in ('toluomoniyi9@gmail.com', 'toluomoniyi@gmail.com', 'tolu@arame.com'));
 
+drop policy if exists "admins can update order tracking" on public.orders;
+create policy "admins can update order tracking"
+  on public.orders for update
+  using (lower(coalesce(auth.jwt() ->> 'email', '')) in ('toluomoniyi9@gmail.com', 'toluomoniyi@gmail.com', 'tolu@arame.com'))
+  with check (lower(coalesce(auth.jwt() ->> 'email', '')) in ('toluomoniyi9@gmail.com', 'toluomoniyi@gmail.com', 'tolu@arame.com'));
+
 drop policy if exists "users/guests can insert orders" on public.orders;
 create policy "users/guests can insert orders"
   on public.orders for insert
   with check (true);
+
+create or replace function public.get_order_tracking(p_order_id uuid, p_tracking_code text)
+returns table (
+  id uuid,
+  status text,
+  tracking_code text,
+  items jsonb,
+  total numeric,
+  shipping_address jsonb,
+  payment_provider text,
+  payment_reference text,
+  payment_channel text,
+  paid_at timestamptz,
+  status_updated_at timestamptz,
+  created_at timestamptz
+)
+language sql
+security definer
+set search_path = public
+as $$
+  select
+    orders.id,
+    orders.status,
+    orders.tracking_code,
+    orders.items,
+    orders.total,
+    orders.shipping_address,
+    orders.payment_provider,
+    orders.payment_reference,
+    orders.payment_channel,
+    orders.paid_at,
+    orders.status_updated_at,
+    orders.created_at
+  from public.orders
+  where orders.id = p_order_id
+    and orders.tracking_code = upper(trim(p_tracking_code))
+  limit 1;
+$$;
+
+revoke all on function public.get_order_tracking(uuid, text) from public;
+grant execute on function public.get_order_tracking(uuid, text) to anon, authenticated;
 
 -- Admin dashboard sign-in events
 create table if not exists public.sign_in_events (

@@ -559,15 +559,32 @@
 }
 
 /* RECEIPT */
-.receipt {
+.receiptLink {
+  display: block;
   max-width: 500px;
   margin: 0 auto 40px;
+  color: inherit;
+  text-decoration: none;
+  outline: none;
+}
+
+.receipt {
+  max-width: 500px;
+  margin: 0;
   background: #fffdfb;
   border: 1px solid rgba(42, 30, 18, 0.12);
   padding: 32px;
   border-radius: 2px;
   text-align: left;
   position: relative;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.receiptLink:hover .receipt,
+.receiptLink:focus-visible .receipt {
+  border-color: rgba(151, 69, 47, 0.45);
+  box-shadow: 0 10px 28px rgba(42, 30, 18, 0.08);
+  transform: translateY(-1px);
 }
 
 .receipt::before {

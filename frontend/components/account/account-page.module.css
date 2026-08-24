@@ -764,6 +764,10 @@
 
 .orderStatusCol {
   margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
 }
 
 .statusBadge {
@@ -777,10 +781,19 @@
 }
 
 .statusBadge.paid,
-.statusBadge.fulfilled {
+.statusBadge.fulfilled,
+.statusBadge.delivered {
   background: #e2f0d9;
   color: #385723;
   border: 1px solid rgba(56, 87, 35, 0.15);
+}
+
+.statusBadge.processing,
+.statusBadge.packed,
+.statusBadge.shipped {
+  background: #fff2cc;
+  color: #7f6000;
+  border: 1px solid rgba(127, 96, 0, 0.15);
 }
 
 .statusBadge.pending {
@@ -793,6 +806,17 @@
   background: #fce4d6;
   color: #c65911;
   border: 1px solid rgba(198, 89, 17, 0.15);
+}
+
+.trackOrderLink {
+  color: #97452f;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.trackOrderLink:hover {
+  color: #2a1e12;
 }
 
 .orderItems {

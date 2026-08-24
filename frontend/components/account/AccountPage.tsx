@@ -13,6 +13,7 @@ import {
   getSupabaseBrowserClient,
 } from "@/frontend/supabase/browser";
 import { openPaystackTransaction } from "@/frontend/payments/paystack";
+import { getOrderStatusLabel, getTrackingHref } from "@/frontend/orders/tracking";
 import styles from "./account-page.module.css";
 
 type AuthMode = "login" | "signup";
@@ -63,6 +64,7 @@ type OrderRow = {
   created_at: string;
   items: OrderItem[] | null;
   status: string | null;
+  tracking_code?: string | null;
   total: number | string;
 };
 
@@ -795,8 +797,11 @@ export function AccountPage() {
                             </div>
                             <div className={styles.orderStatusCol}>
                               <span className={`${styles.statusBadge} ${styles[order.status?.toLowerCase() || "pending"] || styles.pending}`}>
-                                {order.status ? order.status.charAt(0).toUpperCase() + order.status.slice(1) : "Pending"}
+                                {getOrderStatusLabel(order.status)}
                               </span>
+                              <Link className={styles.trackOrderLink} href={getTrackingHref(order.id, order.tracking_code)}>
+                                Track Receipt
+                              </Link>
                             </div>
                           </div>
 
