@@ -105,6 +105,20 @@ const emptyPayment: PaymentForm = {
 };
 
 const cardAuthorizationStorageKey = "arame:paystack:add-card";
+const isPaystackPublicTestMode = (process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || "").startsWith("pk_test_");
+const paystackTestCardHint =
+  "Test mode: use Paystack card 4084 0840 8408 4081, any future expiry, and CVV 408.";
+
+function getCardAuthorizationFailureMessage(message: string, testMode?: boolean) {
+  const baseMessage =
+    message || "Card authorization was declined, so the card could not be saved.";
+
+  if (testMode || isPaystackPublicTestMode) {
+    return `${baseMessage} ${paystackTestCardHint}`;
+  }
+
+  return `${baseMessage} Try another card or ask your bank to allow online card authorization.`;
+}
 
 function getPaystackCardReturn() {
   if (typeof window === "undefined") {
@@ -377,7 +391,9 @@ export function AccountPage() {
         const result = await response.json();
 
         if (!response.ok) {
-          throw new Error(result.error || "Unable to save card.");
+          throw new Error(
+            getCardAuthorizationFailureMessage(result.error || "Unable to save card.", result.testMode)
+          );
         }
 
         window.sessionStorage.removeItem(cardAuthorizationStorageKey);
@@ -1025,7 +1041,9 @@ export function AccountPage() {
             </div>
             <div className={styles.paystackNotice}>
               <strong>Secure Paystack Authorization</strong>
-              <span>Card details open on Paystack&apos;s secure checkout. This wallet saves only the verified card brand and last four digits.</span>
+              <span>Paystack may show a small NGN 50 authorization to verify the card before it can be saved.</span>
+              <span>This wallet saves only the verified card brand, last four digits, and reusable Paystack authorization.</span>
+              {isPaystackPublicTestMode && <span className={styles.testCardHint}>{paystackTestCardHint}</span>}
             </div>
             {message && <p className={styles.message}>{message}</p>}
             <div className={styles.actions} style={{ marginTop: "24px" }}>

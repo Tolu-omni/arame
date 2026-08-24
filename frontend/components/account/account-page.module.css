@@ -698,6 +698,11 @@
   font-weight: 600;
 }
 
+.testCardHint {
+  color: #7a2c1f;
+  font-weight: 600;
+}
+
 .button:disabled,
 .close:disabled {
   cursor: not-allowed;

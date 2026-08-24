@@ -30,6 +30,7 @@ type VerifyBody = {
 type ExistingOrder = {
   id: string;
   items: OrderItem[] | null;
+  payment_channel: string | null;
   shipping_address: ShippingInput | null;
   status: string | null;
   total: number | string;
@@ -43,7 +44,7 @@ function getCardType(brand?: string, cardType?: string) {
 }
 
 function getPaymentMethodType(channel?: string, brand?: string, cardType?: string) {
-  if (channel === "bank_transfer" || channel === "transfer") {
+  if (isTransferChannel(channel)) {
     return "Bank transfer";
   }
 
@@ -52,6 +53,14 @@ function getPaymentMethodType(channel?: string, brand?: string, cardType?: strin
   }
 
   return getCardType(brand, cardType);
+}
+
+function isTransferChannel(channel?: string | null) {
+  return channel === "bank_transfer" || channel === "transfer";
+}
+
+function isPendingTransferStatus(status?: string | null) {
+  return status === "ongoing" || status === "pending";
 }
 
 async function getAuthenticatedUser(request: Request, requireUser = false) {
@@ -91,18 +100,20 @@ export async function POST(request: Request) {
     }
 
     const paystackTransaction = await verifyPaystackTransaction(reference);
-
-    if (paystackTransaction.status !== "success") {
-      return Response.json(
-        { error: paystackTransaction.gateway_response || "Payment was not successful." },
-        { status: 400 }
-      );
-    }
-
     const { supabase, user } = await getAuthenticatedUser(request, purpose === "add_card");
     const authorization = paystackTransaction.authorization;
 
     if (purpose === "add_card") {
+      if (paystackTransaction.status !== "success") {
+        return Response.json(
+          {
+            error: paystackTransaction.gateway_response || "Card authorization was not successful.",
+            testMode: isPaystackTestMode(),
+          },
+          { status: 400 }
+        );
+      }
+
       if (!user) {
         return Response.json({ error: "Please sign in before saving a card." }, { status: 401 });
       }
@@ -156,7 +167,7 @@ export async function POST(request: Request) {
 
     const { data: existingOrder, error: existingOrderError } = await orderSupabase
       .from("orders")
-      .select("id,items,shipping_address,status,total,tracking_code,user_id")
+      .select("id,items,payment_channel,shipping_address,status,total,tracking_code,user_id")
       .eq("payment_reference", paystackTransaction.reference)
       .maybeSingle();
 
@@ -165,6 +176,46 @@ export async function POST(request: Request) {
     }
 
     const persistedOrder = existingOrder as ExistingOrder | null;
+
+    if (paystackTransaction.status !== "success") {
+      const isPendingTransfer =
+        isPendingTransferStatus(paystackTransaction.status) &&
+        (isTransferChannel(paystackTransaction.channel) ||
+          isTransferChannel(persistedOrder?.payment_channel));
+
+      if (isPendingTransfer && persistedOrder) {
+        if (paystackTransaction.amount !== toKobo(Number(persistedOrder.total || 0))) {
+          return Response.json(
+            { error: "Payment amount does not match the current cart total." },
+            { status: 400 }
+          );
+        }
+
+        return Response.json({
+          orderId: persistedOrder.id,
+          pending: true,
+          payment: {
+            last4: "",
+            methodType: "Bank transfer",
+            reference: paystackTransaction.reference,
+          },
+          shipping: persistedOrder.shipping_address,
+          status: paystackTransaction.status,
+          testMode: isPaystackTestMode(),
+          total: Number(persistedOrder.total || 0),
+          trackingCode: persistedOrder.tracking_code,
+        });
+      }
+
+      return Response.json(
+        {
+          error: paystackTransaction.gateway_response || "Payment was not successful.",
+          testMode: isPaystackTestMode(),
+        },
+        { status: 400 }
+      );
+    }
+
     const verifiedItems = persistedOrder?.items?.length
       ? { orderItems: persistedOrder.items, total: Number(persistedOrder.total || 0) }
       : await buildVerifiedOrderItems(body.items ?? []);

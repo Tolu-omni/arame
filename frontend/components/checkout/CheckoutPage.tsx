@@ -46,6 +46,7 @@ type PaymentMethod = {
 type CheckoutPaymentChannel = "card" | "bank_transfer";
 
 type PendingCheckoutPayment = {
+  checkoutChannel?: CheckoutPaymentChannel;
   createdAt: number;
   items: CartItem[];
   paymentLabel?: string;
@@ -252,13 +253,14 @@ export function CheckoutPage() {
     }
 
     const returnReference = paystackReturn.reference;
+    const returnPayment = paystackReturn.payment;
     handledPaystackReferenceRef.current = returnReference;
     setHandlingPaystackReturn(true);
     setStep("processing");
     setErrorMessage("");
 
     const storageKey =
-      paystackReturn.payment === "paystack-saved-card"
+      returnPayment === "paystack-saved-card"
         ? savedCardPaymentStorageKey
         : checkoutPaymentStorageKey;
     const pending = readPendingPayment(storageKey);
@@ -301,18 +303,35 @@ export function CheckoutPage() {
         if (pendingPayment) {
           window.sessionStorage.removeItem(storageKey);
         }
-        window.history.replaceState(null, "", "/checkout");
         setShipping((result.shipping as ShippingForm | undefined) || pendingPayment?.shipping || emptyShipping);
+
+        const isTransferReturn =
+          returnPayment === "paystack-transfer" ||
+          pendingPayment?.checkoutChannel === "bank_transfer" ||
+          result.pending ||
+          result.payment?.methodType === "Bank transfer";
+        const nextTrackingHref = result.orderId
+          ? getTrackingHref(result.orderId, result.trackingCode)
+          : "/account?view=orders";
 
         await completeOrder({
           orderId: result.orderId,
           paymentLabel: pendingPayment?.paymentLabel || (result.payment?.last4
             ? `${result.payment.methodType || "Card"} ending in ${result.payment.last4}`
-            : result.payment?.methodType || "Paystack payment"),
+            : result.pending && result.payment?.methodType === "Bank transfer"
+              ? "Bank transfer pending"
+              : result.payment?.methodType || "Paystack payment"),
           paymentReference: result.payment?.reference || returnReference,
           trackingCode: result.trackingCode,
           total: Number(result.total || pendingPayment?.total || 0),
         });
+
+        if (isTransferReturn) {
+          router.replace(nextTrackingHref);
+          return;
+        }
+
+        window.history.replaceState(null, "", "/checkout");
       } catch (error) {
         console.error("Paystack return verification failed:", error);
         setErrorMessage(error instanceof Error ? error.message : "Unable to verify payment.");
@@ -323,7 +342,7 @@ export function CheckoutPage() {
     }
 
     void verifyReturnedPayment();
-  }, [completeOrder, getSessionAccessToken]);
+  }, [completeOrder, getSessionAccessToken, router]);
 
   const startPaystackCheckout = async (checkoutChannel: CheckoutPaymentChannel) => {
     if (!shipping.email) {
@@ -359,6 +378,7 @@ export function CheckoutPage() {
       window.sessionStorage.setItem(
         checkoutPaymentStorageKey,
         JSON.stringify({
+          checkoutChannel,
           createdAt: Date.now(),
           items,
           paymentLabel: result.paymentLabel || getCheckoutPaymentLabel(checkoutChannel),
